@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light" data-accent="green">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#95BFDD" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-title" content="油耗记录" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="format-detection" content="telephone=no,email=no,address=no" />
+  <meta name="description" content="油耗记录 · 手机端油耗记账、趋势分析与数据导出" />
+  <title>油耗记录</title>
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="icon" type="image/svg+xml" href="assets/icon.svg" />
+  <link rel="apple-touch-icon" href="assets/icon.svg" />
+  <link rel="stylesheet" href="css/app.css" />
+</head>
+<body>
+
+<!-- ===== icon sprite ===== -->
+<svg class="sprite" aria-hidden="true" focusable="false">
+  <symbol id="i-home" viewBox="0 0 24 24"><path d="M3.6 10.6 12 3.9l8.4 6.7V19a1.2 1.2 0 0 1-1.2 1.2h-4.6v-5.8H9.4v5.8H4.8A1.2 1.2 0 0 1 3.6 19z"/></symbol>
+  <symbol id="i-chevron-right" viewBox="0 0 24 24"><path d="M9 5.5 15.5 12 9 18.5"/></symbol>
+  <symbol id="i-chevron-left" viewBox="0 0 24 24"><path d="M15 5.5 8.5 12 15 18.5"/></symbol>
+  <symbol id="i-chevron-down" viewBox="0 0 24 24"><path d="M5.5 9 12 15.5 18.5 9"/></symbol>
+  <symbol id="i-chevron-up" viewBox="0 0 24 24"><path d="M5.5 15 12 8.5 18.5 15"/></symbol>
+  <symbol id="i-dots" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.6" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.6" fill="currentColor" stroke="none"/><circle cx="19" cy="12" r="1.6" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="i-target" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.2"/><circle cx="12" cy="12" r="3.2" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="i-drop" viewBox="0 0 24 24"><path d="M12 3.4c3.1 3.9 5.5 6.9 5.5 9.8a5.5 5.5 0 1 1-11 0c0-2.9 2.4-5.9 5.5-9.8z"/></symbol>
+  <symbol id="i-list" viewBox="0 0 24 24"><rect x="4.5" y="3.8" width="15" height="16.4" rx="2.2"/><path d="M8.2 8.6h7.6M8.2 12h7.6M8.2 15.4h4.6"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5.6v12.8M5.6 12h12.8"/></symbol>
+  <symbol id="i-fuel" viewBox="0 0 24 24"><path d="M5.6 20.2V5.4a1.3 1.3 0 0 1 1.3-1.3h5a1.3 1.3 0 0 1 1.3 1.3v14.8M4.2 20.2h10.4M7.7 7.3h3.4v3.2H7.7z"/><path d="M13.2 9.4h2.2l2.3 2.4v5.6a1.7 1.7 0 0 0 3.4 0v-6.1l-2-2.4"/></symbol>
+  <symbol id="i-bear" viewBox="0 0 24 24"><circle cx="6.9" cy="6.4" r="2.4"/><circle cx="17.1" cy="6.4" r="2.4"/><path d="M12 20.2c3.5 0 6.2-2.7 6.2-6.2S15.5 7.8 12 7.8 5.8 10.5 5.8 14s2.7 6.2 6.2 6.2z"/><circle cx="9.7" cy="13" r="1" fill="currentColor" stroke="none"/><circle cx="14.3" cy="13" r="1" fill="currentColor" stroke="none"/><path d="M10.7 16.3c.8.6 1.8.6 2.6 0"/></symbol>
+  <symbol id="i-edit" viewBox="0 0 24 24"><path d="M4.2 19.8h4l10.2-10.2-4-4L4.2 15.8z"/><path d="M13.2 6.6l4 4"/></symbol>
+  <symbol id="i-swap" viewBox="0 0 24 24"><path d="M4 8.4h12.6M13.6 5.4l3 3-3 3M20 15.6H7.4M10.4 12.6l-3 3 3 3"/></symbol>
+  <symbol id="i-menu" viewBox="0 0 24 24"><path d="M4 6.5h16M4 12h16M4 17.5h16"/></symbol>
+</svg>
+
+<div class="phone" id="phone">
+
+  <!-- ================= HOME ================= -->
+  <section class="view" id="view-home" data-view="home">
+    <div class="home-hero">
+      <div class="hero-sky"><span class="hero-arc"></span></div>
+      <div class="hero-inner">
+        <button class="veh-btn" data-action="pick-vehicle">
+          <span id="vehName">默认车辆</span>
+          <svg class="ico ico-sm"><use href="#i-chevron-down"/></svg>
+        </button>
+        <p class="hero-hint">点上面▲去设置车型</p>
+      </div>
+
+      <div class="card latest-card">
+        <button class="latest-head" data-action="go" data-view="list">
+          <span>最新油耗</span>
+          <svg class="ico ico-xs"><use href="#i-chevron-right"/></svg>
+        </button>
+        <div class="latest-row">
+          <div class="latest-num">
+            <b id="latestValue">--</b><em>升/百公里</em>
+          </div>
+          <div class="latest-rate" id="latestRate">暂不能评级</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-head">
+        <h2>统计</h2>
+        <button class="range-chip" data-action="pick-range" data-scope="home">
+          <span data-range-label="home">全部</span>
+          <svg class="ico ico-xs"><use href="#i-swap"/></svg>
+        </button>
+      </div>
+      <div class="stat-grid" id="statGrid"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-head">
+        <h2>油耗变化趋势</h2>
+        <button class="range-chip" data-action="pick-range" data-scope="home">
+          <span data-range-label="home">全部</span>
+          <svg class="ico ico-xs"><use href="#i-swap"/></svg>
+        </button>
+      </div>
+      <div class="legend">
+        <span class="lg"><i class="lg-line accent"></i>油耗</span>
+        <span class="lg"><i class="lg-line ref"></i><span id="refLegend">内江市油耗参考-低位</span></span>
+      </div>
+      <div class="chart chart-trend" id="trendChart"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-head">
+        <h2 class="with-bar">油费支出月度统计</h2>
+        <button class="range-chip" data-action="pick-range" data-scope="bar">
+          <span data-range-label="bar">2026</span>
+          <svg class="ico ico-xs"><use href="#i-swap"/></svg>
+        </button>
+      </div>
+      <div class="chart chart-bar" id="barChart"></div>
+    </div>
+    <div class="scroll-pad"></div>
+  </section>
+
+  <!-- ================= LIST ================= -->
+  <section class="view" id="view-list" data-view="list">
+    <header class="nav nav-sticky">
+      <button class="nav-btn" data-action="go" data-view="home" aria-label="首页">
+        <svg class="ico"><use href="#i-home"/></svg>
+      </button>
+      <h1>油耗列表</h1>
+      <div class="nav-right">
+        <button class="nav-btn" data-action="open-menu" aria-label="更多"><svg class="ico"><use href="#i-dots"/></svg></button>
+        <button class="nav-btn" data-action="go" data-view="me" aria-label="我的"><svg class="ico"><use href="#i-target"/></svg></button>
+      </div>
+    </header>
+
+    <div class="list-pad">
+      <button class="year-pill" data-action="pick-range" data-scope="list">
+        <span data-range-label="list">全部</span>
+        <svg class="ico ico-xs"><use href="#i-chevron-down"/></svg>
+      </button>
+    </div>
+
+    <div class="strip-wrap">
+      <button class="strip-arrow" data-action="strip" data-dir="-1" aria-label="上一组"><svg class="ico ico-xs"><use href="#i-chevron-left"/></svg></button>
+      <div class="summary-strip" id="summaryStrip"></div>
+      <button class="strip-arrow" data-action="strip" data-dir="1" aria-label="下一组"><svg class="ico ico-xs"><use href="#i-chevron-right"/></svg></button>
+    </div>
+
+    <div class="rec-list" id="recList"></div>
+    <div class="scroll-pad"></div>
+  </section>
+
+  <!-- ================= ENTRY ================= -->
+  <section class="view view-full" id="view-entry" data-view="entry">
+    <header class="nav">
+      <button class="nav-btn" data-action="entry-back" aria-label="返回"><svg class="ico"><use href="#i-chevron-left"/></svg></button>
+      <h1 id="entryTitle">默认车辆</h1>
+      <div class="nav-right">
+        <button class="nav-btn" data-action="record-menu" aria-label="更多"><svg class="ico"><use href="#i-dots"/></svg></button>
+        <button class="nav-btn" data-action="go" data-view="me" aria-label="我的"><svg class="ico"><use href="#i-target"/></svg></button>
+      </div>
+    </header>
+
+    <div class="entry-scroll" id="entryScroll">
+      <div class="form-card">
+        <div class="field-row">
+          <label for="fDate">加油日期<i class="req">*</i></label>
+          <div class="field-val">
+            <input type="date" id="fDate" />
+            <svg class="ico ico-xs arrow"><use href="#i-chevron-right"/></svg>
+          </div>
+        </div>
+        <div class="field-row">
+          <label for="fTime">加油时间<i class="req">*</i></label>
+          <div class="field-val">
+            <input type="time" id="fTime" />
+            <svg class="ico ico-xs arrow"><use href="#i-chevron-right"/></svg>
+          </div>
+        </div>
+        <div class="field-row">
+          <label for="fOdo">当前里程<i class="req">*</i>
+            <button class="q" data-action="hint" data-hint="仪表盘上的总里程，建议每次加油时记录，用于计算油耗。">?</button>
+          </label>
+          <div class="field-val">
+            <input type="text" id="fOdo" inputmode="decimal" placeholder="请输入里程" autocomplete="off" />
+            <span class="suffix">公里</span>
+          </div>
+        </div>
+        <p class="hint-line" id="prevHint">上一条 —</p>
+      </div>
+
+      <div class="form-card">
+        <div class="form-label">机显单价（元/升）× 加油量（升）＝ 机显金额（元）<i class="req">*</i></div>
+        <div class="tri-inputs">
+          <input type="text" id="fPrice" inputmode="decimal" placeholder="0.00" autocomplete="off" />
+          <input type="text" id="fVolume" inputmode="decimal" placeholder="0.00" autocomplete="off" />
+          <input type="text" id="fAmount" inputmode="decimal" placeholder="0.00" autocomplete="off" />
+        </div>
+
+        <div class="form-label sub">实付单价<span>优惠金额</span><span>实付金额</span></div>
+        <div class="tri-inputs">
+          <input type="text" id="fPayPrice" inputmode="decimal" placeholder="0.00" autocomplete="off" />
+          <input type="text" id="fDiscount" inputmode="decimal" placeholder="0.00" autocomplete="off" />
+          <input type="text" id="fPayAmount" inputmode="decimal" placeholder="0.00" autocomplete="off" />
+        </div>
+
+        <div class="field-row between">
+          <label>是否加满跳枪？
+            <button class="q" data-action="hint" data-hint="跳枪即加满。只有连续两次加满之间的数据才能准确计算油耗。">?</button>
+          </label>
+          <div class="seg" id="segFull">
+            <button type="button" data-val="1">已跳枪</button>
+            <button type="button" data-val="0">未跳枪</button>
+          </div>
+        </div>
+        <div class="field-row between">
+          <label>油量警告灯亮了吗？
+            <button class="q" data-action="hint" data-hint="加油前油灯是否已经亮起，用于判断加油时机。">?</button>
+          </label>
+          <div class="seg" id="segWarn">
+            <button type="button" data-val="1">油灯亮</button>
+            <button type="button" data-val="0">没有亮</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="form-card opt-card">
+        <h3 class="opt-title"><span class="bar"></span>选填项</h3>
+
+        <div class="field-row">
+          <label for="fStation">加油站</label>
+          <div class="field-val">
+            <input type="text" id="fStation" placeholder="填写加油站名称" autocomplete="off" />
+            <svg class="ico ico-xs arrow"><use href="#i-chevron-right"/></svg>
+          </div>
+        </div>
+        <div class="field-row">
+          <label for="fFuel">燃油标号</label>
+          <div class="field-val">
+            <select id="fFuel"></select>
+            <svg class="ico ico-xs arrow"><use href="#i-chevron-right"/></svg>
+          </div>
+        </div>
+        <div class="field-row between">
+          <label>上次记录了吗？
+            <button class="q" data-action="hint" data-hint="若中间漏记了一次加油，这里选择“没记录”会跳过该段的油耗计算。">?</button>
+          </label>
+          <div class="seg" id="segLast">
+            <button type="button" data-val="1">记录了</button>
+            <button type="button" data-val="0">没记录</button>
+          </div>
+        </div>
+
+        <textarea id="fNote" placeholder="编辑备注" rows="3"></textarea>
+
+        <div class="photo-row">
+          <button type="button" class="photo-box" id="photoBox" data-action="pick-photo" aria-label="添加照片">
+            <svg class="ico"><use href="#i-plus"/></svg>
+          </button>
+          <input type="file" id="photoInput" accept="image/*" hidden />
+        </div>
+      </div>
+
+      <div class="entry-tip">数据保存在本机浏览器，建议定期在“我的”中导出备份。</div>
+      <div class="scroll-pad"></div>
+    </div>
+
+    <div class="entry-foot">
+      <button class="btn-primary" data-action="save-record" id="saveBtn">保存</button>
+    </div>
+  </section>
+
+  <!-- ================= ME ================= -->
+  <section class="view" id="view-me" data-view="me">
+    <header class="nav nav-sticky nav-plain"><h1>我的</h1></header>
+
+    <div class="me-hero">
+      <div class="me-avatar"><svg class="ico"><use href="#i-bear"/></svg></div>
+      <div class="me-hero-main">
+        <b id="meVehName">默认车辆</b>
+        <span id="meSub">共 0 条加油记录</span>
+      </div>
+      <button class="me-switch" data-action="pick-vehicle">切换</button>
+    </div>
+
+    <div class="card">
+      <h3 class="card-title">外观</h3>
+      <div class="field-row between">
+        <label>主题</label>
+        <div class="seg seg-sm" id="segTheme">
+          <button type="button" data-val="light">极浅色</button>
+          <button type="button" data-val="dark">深色</button>
+        </div>
+      </div>
+      <div class="accent-block">
+        <p class="accent-label">强调色</p>
+        <div class="accent-list" id="accentList">
+          <button type="button" class="accent-item" data-val="blue"><i class="dot dot-blue"></i><span>蓝</span></button>
+          <button type="button" class="accent-item" data-val="green"><i class="dot dot-green"></i><span>绿</span></button>
+          <button type="button" class="accent-item" data-val="orange"><i class="dot dot-orange"></i><span>橙</span></button>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3 class="card-title">油耗参考</h3>
+      <div class="row-list">
+        <button class="row" data-action="edit-region">
+          <div class="row-main"><b>参考地区</b><span id="regionText">内江市</span></div>
+          <svg class="ico ico-xs arrow"><use href="#i-chevron-right"/></svg>
+        </button>
+        <button class="row" data-action="edit-ref">
+          <div class="row-main"><b>低位参考油耗</b><span id="refText">7.5 升/百公里</span></div>
+          <svg class="ico ico-xs arrow"><use href="#i-chevron-right"/></svg>
+        </button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3 class="card-title">车辆管理</h3>
+      <div class="row-list" id="vehicleRows"></div>
+      <button class="row-add" data-action="add-vehicle">＋ 添加车辆</button>
+    </div>
+
+    <div class="card">
+      <h3 class="card-title">数据管理</h3>
+      <div class="row-list">
+        <button class="row" data-action="export-xlsx">
+          <div class="row-main"><b>导出 Excel 表格</b><span>.xlsx，Excel / WPS / Numbers 可直接打开</span></div>
+          <svg class="ico ico-xs arrow"><use href="#i-chevron-right"/></svg>
+        </button>
+        <button class="row" data-action="export-json">
+          <div class="row-main"><b>导出 JSON 备份</b><span>完整备份，可用于恢复全部数据</span></div>
+          <svg class="ico ico-xs arrow"><use href="#i-chevron-right"/></svg>
+        </button>
+        <button class="row" data-action="import-file">
+          <div class="row-main"><b>从文件恢复数据</b><span>支持 .csv / .json；.xlsx 请另存为 CSV</span></div>
+          <svg class="ico ico-xs arrow"><use href="#i-chevron-right"/></svg>
+        </button>
+        <button class="row danger" data-action="clear-all">
+          <div class="row-main"><b>清空所有记录</b><span>需要二次确认，清空后无法恢复</span></div>
+          <svg class="ico ico-xs arrow"><use href="#i-chevron-right"/></svg>
+        </button>
+      </div>
+    </div>
+
+    <p class="me-note">数据存储在浏览器本地，清除网站数据会丢失。建议定期“导出 Excel 表格”或“导出 JSON 备份”。导入会替换全部记录，车辆信息与设置保留。</p>
+    <div class="scroll-pad"></div>
+
+    <input type="file" id="importInput" accept=".csv,.json,.txt,.xlsx" hidden />
+  </section>
+
+  <!-- ================= TABBAR ================= -->
+  <nav class="tabbar" id="tabbar">
+    <button class="tab" data-action="go" data-view="home"><svg class="ico"><use href="#i-drop"/></svg><span>油耗</span></button>
+    <button class="tab" data-action="go" data-view="list"><svg class="ico"><use href="#i-list"/></svg><span>详单</span></button>
+    <button class="tab tab-plus" data-action="new-record" aria-label="记一笔"><span class="plus"><svg class="ico"><use href="#i-plus"/></svg></span></button>
+    <button class="tab" data-action="go" data-view="entry"><svg class="ico"><use href="#i-fuel"/></svg><span>加油</span></button>
+    <button class="tab" data-action="go" data-view="me"><svg class="ico"><use href="#i-bear"/></svg><span>我的</span></button>
+  </nav>
+
+  <!-- ================= MODALS ================= -->
+  <div class="modal" id="rangeModal" hidden>
+    <div class="modal-mask" data-action="modal-close"></div>
+    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="rangeTitle">
+      <h3 class="modal-title" id="rangeTitle">请选择</h3>
+      <div class="chip-grid" id="rangeChips"></div>
+      <div class="custom-range" id="customRange" hidden>
+        <input type="date" id="rangeFrom" />
+        <span>至</span>
+        <input type="date" id="rangeTo" />
+      </div>
+      <div class="modal-actions">
+        <button class="btn-ghost" data-action="range-cancel">取消</button>
+        <button class="btn-primary" data-action="range-ok">确定</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="sheet" id="vehicleSheet" hidden>
+    <div class="sheet-mask" data-action="modal-close"></div>
+    <div class="sheet-panel">
+      <div class="sheet-head"><h3>选择车辆</h3><button class="sheet-x" data-action="modal-close">×</button></div>
+      <div class="sheet-body" id="vehicleList"></div>
+      <button class="sheet-add" data-action="add-vehicle">＋ 添加车辆</button>
+    </div>
+  </div>
+
+  <div class="sheet" id="menuSheet" hidden>
+    <div class="sheet-mask" data-action="modal-close"></div>
+    <div class="sheet-panel">
+      <div class="sheet-head"><h3>更多</h3><button class="sheet-x" data-action="modal-close">×</button></div>
+      <div class="sheet-body sheet-links">
+        <button data-action="export-xlsx">导出 Excel 表格</button>
+        <button data-action="export-json">导出 JSON 备份</button>
+        <button data-action="import-file">从文件恢复数据</button>
+        <button class="danger" data-action="clear-all">清空所有记录</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal" id="confirmModal" hidden>
+    <div class="modal-mask" data-action="cancel-confirm"></div>
+    <div class="modal-card">
+      <h3 class="modal-title" id="confirmTitle">确认</h3>
+      <p class="modal-desc" id="confirmDesc"></p>
+      <div class="modal-actions">
+        <button class="btn-ghost" data-action="cancel-confirm">取消</button>
+        <button class="btn-primary danger" data-action="ok-confirm">确定</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+</div>
+
+<script src="js/core.js"></script>
+<script src="js/charts.js"></script>
+<script src="js/export.js"></script>
+<script src="js/views.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
