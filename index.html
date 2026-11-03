@@ -60,7 +60,7 @@
           <div class="latest-num">
             <b id="latestValue">--</b><em>升/百公里</em>
           </div>
-          <div class="latest-rate" id="latestRate">评级</div>
+          <div class="latest-rate" id="latestRate">暂不能评级</div>
         </div>
       </div>
     </div>
@@ -86,7 +86,7 @@
       </div>
       <div class="legend">
         <span class="lg"><i class="lg-line accent"></i>油耗</span>
-        <span class="lg"><i class="lg-line ref"></i><span id="refLegend">成都市油耗参考-低位</span></span>
+        <span class="lg"><i class="lg-line ref"></i><span id="refLegend">内江市油耗参考-低位</span></span>
       </div>
       <div class="chart chart-trend" id="trendChart"></div>
     </div>
@@ -318,7 +318,7 @@
           <svg class="ico ico-xs arrow"><use href="#i-chevron-right"/></svg>
         </button>
         <button class="row" data-action="import-file">
-          <div class="row-main"><b>从文件恢复数据</b><span>支持 .csv / .json；.xlsx 请另存为 CSV</span></div>
+          <div class="row-main"><b>从文件恢复数据</b><span>支持 .xlsx / .csv / .json，自动识别表头</span></div>
           <svg class="ico ico-xs arrow"><use href="#i-chevron-right"/></svg>
         </button>
         <button class="row danger" data-action="clear-all">
@@ -331,7 +331,7 @@
     <p class="me-note">数据存储在浏览器本地，清除网站数据会丢失。建议定期“导出 Excel 表格”或“导出 JSON 备份”。导入会替换全部记录，车辆信息与设置保留。</p>
     <div class="scroll-pad"></div>
 
-    <input type="file" id="importInput" accept=".csv,.json,.txt,.xlsx" hidden />
+    <input type="file" id="importInput" accept=".xlsx,.xlsm,.csv,.json,.txt" hidden />
   </section>
 
   <!-- ================= TABBAR ================= -->
@@ -400,6 +400,7 @@
 
 <script src="js/core.js"></script>
 <script src="js/charts.js"></script>
+<script src="js/xlsx.js"></script>
 <script src="js/export.js"></script>
 <script src="js/views.js"></script>
 <script src="js/app.js"></script>
