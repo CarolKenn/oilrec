@@ -345,6 +345,8 @@
   var EST_WINDOW = 12;        // 最多回看最近 12 次加油
   var EST_MIN_DIST = 300;     // 样本里程不足 300 公里时扩大到全部记录
   var EST_FLOOR_DIST = 100;   // 低于 100 公里不给估算，误差太大
+  var LIVE_WINDOW = 12;       // 「进行中」参考值只看最近 12 段
+  var LIVE_MIN_DIST = 200;    // 累计里程不足 200 公里时不给参考值
 
   function odoSort(a, b) {
     return (a.odometer - b.odometer) || String(a.date).localeCompare(String(b.date));
@@ -383,6 +385,9 @@
     index: function (records) {
       var list = records.slice().sort(odoSort);
       var accFuel = 0, accDist = 0;
+      // 滚动窗口：最近 LIVE_WINDOW 段的加油量与里程，用于未结算记录的参考值
+      var win = [], winFuel = 0, winDist = 0;
+
       return list.map(function (r, i) {
         var prev = i ? list[i - 1] : null;
         var dist = prev ? round(r.odometer - prev.odometer, 1) : null;
@@ -390,9 +395,21 @@
         if (r.lastRecorded === false) {
           accFuel = 0;
           accDist = 0;
+          win = [];
+          winFuel = 0;
+          winDist = 0;
         } else if (dist !== null && dist > 0) {
           accDist += dist;
           accFuel += num(r.volume);
+          var f = num(r.volume);
+          win.push({ f: f, d: dist });
+          winFuel += f;
+          winDist += dist;
+          while (win.length > LIVE_WINDOW) {
+            var old = win.shift();
+            winFuel -= old.f;
+            winDist -= old.d;
+          }
         }
         var cons = null, segFuel = null, segDist = null;
         if (r.fullTank && accDist > 0) {
@@ -402,11 +419,19 @@
           accFuel = 0;
           accDist = 0;
         }
+        // 还没结算：给一个「最近累计加油量 ÷ 累计里程」的参考值，下次加满会被精确值替换
+        var liveCons = null, liveDist = null;
+        if (cons === null && win.length && winDist >= LIVE_MIN_DIST) {
+          liveCons = round(winFuel / winDist * 100, 2);
+          liveDist = round(winDist, 1);
+        }
         return Object.assign({}, r, {
           dist: dist,
           cons: cons,
           segFuel: segFuel,
           segDist: segDist,
+          liveCons: liveCons,
+          liveDist: liveDist,
           costPerKm: (dist !== null && dist > 0) ? round(num(r.payAmount) / dist, 2) : null
         });
       });

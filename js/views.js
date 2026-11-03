@@ -141,13 +141,18 @@
 
       $('#recList').innerHTML = rows.map(function (r) {
         var open = expanded[r.id];
+        var live = r.cons === null && r.liveCons !== null;
+        var val = r.cons !== null ? r.cons : r.liveCons;
         var high = (r.cons !== null && avg !== null && r.cons > avg + 0.9);
+        var cls = 'rec-cons' + (high ? ' high' : '') + (live ? ' live' : '');
+        var valTxt = val === null ? '--' : (live ? '<i class="apx">≈</i>' : '') + v2(val);
+        var unitTxt = r.cons !== null ? '升/百公里'
+          : (live ? '估算' : (r.dist === null ? '起点' : (r.fullTank ? '待结算' : '未加满')));
         return '<article class="rec' + (open ? ' open' : '') + '" data-id="' + r.id + '">' +
           '<button class="rec-head" data-action="toggle-rec" data-id="' + r.id + '">' +
             '<span class="rec-bar"></span>' +
             '<span class="rec-date">' + U.slashDate(r.date) + '</span>' +
-            '<span class="rec-cons' + (high ? ' high' : '') + '">' + (r.cons === null ? '--' : v2(r.cons)) +
-            '<em>' + (r.cons === null ? (r.fullTank ? '待结算' : '未加满') : '升/百公里') + '</em></span>' +
+            '<span class="' + cls + '">' + valTxt + '<em>' + unitTxt + '</em></span>' +
             '<span class="rec-odo">' + v1(r.odometer) + '<em>公里</em></span>' +
             '<svg class="ico ico-xs chev"><use href="#i-chevron-down"/></svg>' +
           '</button>' +
