@@ -19,6 +19,7 @@
         bar: { type: 'year', year: String(new Date().getFullYear()) }
       },
       stats: { mode: 'month', ym: '', year: '', from: '', to: '' },
+      engineCtx: null,
       expanded: {},
       editing: null,
       photo: '',
@@ -183,17 +184,9 @@
         if (act === 'clear-all') { self.closeAll(); self.clearAll(); return; }
         if (act === 'pick-photo') { $('#photoInput').click(); return; }
         if (act === 'hint') { self.toast(el.dataset.hint || ''); return; }
-        if (act === 'edit-ref') {
-          self.prompt('低位参考油耗（升/百公里）', String(Store.settings().refLow || 7.5), function (val) {
-            var n = U.num(val);
-            if (!n || n > 30) { self.toast('请输入 1-30 之间的数值'); return; }
-            Store.settings().refLow = U.round(n, 1);
-            Store.persist();
-            w.Views.me();
-            self.toast('已更新参考油耗');
-          });
-          return;
-        }
+        if (act === 'edit-engine') { self.openEngine(); return; }
+        if (act === 'engine-cancel') { $('#engineModal').hidden = true; return; }
+        if (act === 'engine-ok') { self.applyEngine(); return; }
         if (act === 'stats-back') { self.go('me'); return; }
         if (act === 'stats-prev') { self.shiftStats(-1); return; }
         if (act === 'stats-next') { self.shiftStats(1); return; }
@@ -237,6 +230,27 @@
         w.Views.me();
         self.toast('强调色已切换');
       });
+
+      /* 车辆参数弹窗：进气形式 & 微调（事件委托，只绑定一次） */
+      var engineModal = $('#engineModal');
+      if (engineModal) {
+        engineModal.addEventListener('click', function (e) {
+          var ctx = self.state.engineCtx;
+          if (!ctx) return;
+          var step = e.target.closest('.offset-btn');
+          if (step) {
+            if (step.disabled) return;
+            ctx.offset = Calc.clampOffset(ctx.offset + (+step.dataset.step));
+            self.syncEngine();
+            return;
+          }
+          var asp = e.target.closest('#segAsp button');
+          if (asp) {
+            ctx.turbo = asp.dataset.val === 'turbo';
+            self.syncEngine();
+          }
+        });
+      }
 
       /* 我的统计：模式切换 & 自定义区间 */
       var segStats = $('#segStats');
@@ -487,6 +501,81 @@
       this.toast('已添加车辆');
     },
 
+    /* ---------------- 车辆参数（排量 / 进气形式 / 微调） ---------------- */
+    openEngine: function () {
+      this.closeAll();
+      var veh = Store.vehicle() || {};
+      var eng = veh.engine || { disp: 2.0, turbo: false, offset: 0 };
+      var ctx = this.state.engineCtx = {
+        disp: Number(eng.disp).toFixed(1),
+        turbo: !!eng.turbo,
+        offset: Calc.clampOffset(eng.offset)
+      };
+
+      $('#dispChips').innerHTML = Calc.REF_DISPS.map(function (d) {
+        return '<button type="button" class="chip" data-disp="' + d.toFixed(1) + '">' + d.toFixed(1) + ' L</button>';
+      }).join('');
+
+      var self = this;
+      $$('#dispChips .chip').forEach(function (chip) {
+        chip.addEventListener('click', function () {
+          ctx.disp = chip.dataset.disp;
+          self.syncEngine();
+        });
+      });
+
+      this.syncEngine();
+      $('#engineModal').hidden = false;
+    },
+
+    syncEngine: function () {
+      var ctx = this.state.engineCtx;
+      if (!ctx) return;
+      var max = Calc.MAX_OFFSET;
+
+      $$('#dispChips .chip').forEach(function (c) {
+        c.classList.toggle('on', c.dataset.disp === String(ctx.disp));
+      });
+      $$('#segAsp button').forEach(function (b) {
+        b.classList.toggle('on', (b.dataset.val === 'turbo') === ctx.turbo);
+      });
+
+      var base = Calc.refBase(ctx.disp, ctx.turbo);
+      var off = Calc.clampOffset(ctx.offset);
+      var val = Math.round((base + off) * 10) / 10;
+
+      var ov = $('#offsetVal');
+      ov.textContent = off === 0 ? '0' : (off > 0 ? '+' : '−') + Math.abs(off).toFixed(1);
+      ov.classList.toggle('off-zero', off === 0);
+
+      $$('#engineModal .offset-btn').forEach(function (b) {
+        var step = +b.dataset.step;
+        b.disabled = (step > 0 && off >= max) || (step < 0 && off <= -max);
+      });
+
+      $('#enginePreview').textContent = val.toFixed(1);
+
+      var hint = $('#engineHint');
+      hint.hidden = off === 0;
+      if (off !== 0) {
+        hint.textContent = '基础值 ' + Number(base).toFixed(1) + '，微调 ' +
+          (off > 0 ? '+' : '−') + Math.abs(off).toFixed(1) + ' → ' + val.toFixed(1) + ' 升/百公里';
+      }
+    },
+
+    applyEngine: function () {
+      var ctx = this.state.engineCtx;
+      if (!ctx) return;
+      var veh = Store.vehicle();
+      if (!veh) return;
+      Store.updateVehicle(veh.id, {
+        engine: { disp: ctx.disp, turbo: ctx.turbo, offset: Calc.clampOffset(ctx.offset) }
+      });
+      $('#engineModal').hidden = true;
+      this.render();
+      this.toast('参考低位油耗已更新为 ' + Number(Calc.refLow(veh)).toFixed(1) + ' 升/百公里');
+    },
+
     /* ---------------- 区间选择 ---------------- */
     openRange: function (scope) {
       this.closeAll();
@@ -620,6 +709,7 @@
 
     closeAll: function () {
       $('#rangeModal').hidden = true;
+      $('#engineModal').hidden = true;
       $('#vehicleSheet').hidden = true;
       $('#menuSheet').hidden = true;
       if (!this.state.confirmCb) $('#confirmModal').hidden = true;

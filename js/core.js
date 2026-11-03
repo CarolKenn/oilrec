@@ -52,8 +52,48 @@
   }
 
   /* ---------------- 演示数据 ---------------- */
+  /* ---------------- 参考油耗：按排量 + 进气形式估算 ----------------
+     数值为该排量车型在顺畅路况下的「低位」实测油耗（升/百公里），
+     同排量涡轮机进气量更大，低位值比自吸高 0.5～1.0 升。 */
+  var REF_DISPS = [1.0, 1.2, 1.4, 1.5, 1.6, 1.8, 2.0, 2.4, 2.5, 3.0, 3.5, 4.0];
+  var REF_TABLE = {
+    na: [5.3, 5.6, 5.9, 6.2, 6.5, 7.0, 7.5, 8.6, 8.9, 10.2, 11.5, 12.6],
+    turbo: [5.6, 6.1, 6.7, 7.0, 7.3, 7.8, 8.4, 9.4, 9.6, 10.8, 11.9, 12.9]
+  };
+
+  /* 查表得到基础参考值（不含手动微调） */
+  function refBase(disp, turbo) {
+    var table = REF_TABLE[turbo ? 'turbo' : 'na'];
+    disp = num(disp) || 2.0;
+    if (disp <= REF_DISPS[0]) return table[0];
+    var last = REF_DISPS.length - 1;
+    if (disp >= REF_DISPS[last]) return table[last];
+    for (var i = 0; i < last; i++) {
+      var a = REF_DISPS[i], b = REF_DISPS[i + 1];
+      if (disp >= a && disp <= b) {
+        var t = (disp - a) / (b - a);
+        return round(table[i] + (table[i + 1] - table[i]) * t, 1);
+      }
+    }
+    return table[last];
+  }
+
+  function clampOffset(v) {
+    v = num(v) || 0;
+    v = Math.round(v * 2) / 2;           // 只保留 0.5 的整数倍
+    if (v > 2) v = 2;
+    if (v < -2) v = -2;
+    return v;
+  }
+
+  /* 实际参考值 = 查表值 + 手动微调 */
+  function refLowOf(veh) {
+    var e = (veh && veh.engine) || {};
+    return round(refBase(e.disp, e.turbo) + clampOffset(e.offset), 1);
+  }
+
   function seedDB() {
-    var vehicle = { id: 'v1', name: '默认车辆', plate: '', model: '' };
+    var vehicle = { id: 'v1', name: '默认车辆', plate: '', model: '', engine: { disp: 2.0, turbo: false, offset: 0 } };
     var consPlan = [
       10.9, 10.4, 7.8, 7.8, 7.8, 7.8, 8.4, 8.4, 8.4, 7.5,
       7.5, 7.5, 7.5, 7.5, 10.5, 10.5, 7.4, 8.2, 8.3, 7.8,
@@ -116,7 +156,7 @@
     }
     return {
       version: 1,
-      settings: { theme: 'light', accent: 'green', refLow: 7.5 },
+      settings: { theme: 'light', accent: 'green' },
       vehicles: [vehicle],
       currentVehicleId: vehicle.id,
       records: records
@@ -143,8 +183,16 @@
 
     migrate: function () {
       var db = this.db;
-      db.settings = Object.assign({ theme: 'light', accent: 'green', refLow: 7.5 }, db.settings || {});
+      db.settings = Object.assign({ theme: 'light', accent: 'green' }, db.settings || {});
       if (!db.vehicles.length) db.vehicles.push({ id: 'v1', name: '默认车辆', plate: '', model: '' });
+      db.vehicles.forEach(function (v) {
+        var e = v.engine || {};
+        v.engine = {
+          disp: num(e.disp) || 2.0,
+          turbo: !!e.turbo,
+          offset: clampOffset(e.offset)
+        };
+      });
       if (!this.vehicle()) db.currentVehicleId = db.vehicles[0].id;
       db.records = db.records.filter(function (r) { return r && r.date; }).map(function (r) {
         r.volume = num(r.volume);
@@ -184,7 +232,8 @@
     },
 
     addVehicle: function (name) {
-      var v = { id: uid(), name: name || ('车辆 ' + (this.db.vehicles.length + 1)), plate: '', model: '' };
+      var v = { id: uid(), name: name || ('车辆 ' + (this.db.vehicles.length + 1)), plate: '', model: '',
+        engine: { disp: 2.0, turbo: false, offset: 0 } };
       this.db.vehicles.push(v);
       this.db.currentVehicleId = v.id;
       this.persist();
@@ -412,7 +461,17 @@
       if (cons <= refLow) return '表现优秀';
       if (cons <= refLow + 1.2) return '表现良好';
       return '油耗偏高';
-    }
+    },
+
+    refLow: function (veh) { return refLowOf(veh || Store.vehicle()); },
+
+    refBase: function (disp, turbo) { return refBase(disp, turbo); },
+
+    clampOffset: clampOffset,
+
+    MAX_OFFSET: 2,
+
+    REF_DISPS: REF_DISPS
   };
 
   w.Oil = {

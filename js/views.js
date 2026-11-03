@@ -44,7 +44,7 @@
       // 最新油耗
       var last = Calc.latest(items);
       $('#latestValue').textContent = last ? v2(last.cons) : '--';
-      $('#latestRate').textContent = last ? Calc.rating(last.cons, items.length, settings.refLow) : '暂不能评级';
+      $('#latestRate').textContent = last ? Calc.rating(last.cons, items.length, Calc.refLow(veh)) : '暂不能评级';
 
       // 统计
       $('#statGrid').innerHTML =
@@ -55,9 +55,9 @@
         statItem('累计油费', v0(s.cost), '元') +
         statItem('总计优惠', v0(s.discount), '元');
 
-      // 参考线
-      var refLow = settings.refLow;
-      $('#refLegend').textContent = '油耗参考-低位';
+      // 参考线（按当前车辆排量 / 进气形式估算）
+      var refLow = Calc.refLow(veh);
+      $('#refLegend').textContent = '参考低位 ' + Number(refLow).toFixed(1);
 
       w.Chart.line($('#trendChart'), {
         points: Calc.trend(items, range),
@@ -158,7 +158,13 @@
         b.classList.toggle('on', b.dataset.val === db.settings.accent);
       });
 
-      $('#refText').textContent = v1(db.settings.refLow) + ' 升/百公里';
+      // 车辆参数
+      var eng = (veh && veh.engine) || { disp: 2.0, turbo: false, offset: 0 };
+      var off = Calc.clampOffset(eng.offset);
+      $('#engineText').textContent = Number(eng.disp).toFixed(1) + ' L · ' +
+        (eng.turbo ? '涡轮增压' : '自然吸气') +
+        (off ? ' · 微调 ' + (off > 0 ? '+' : '−') + Math.abs(off).toFixed(1) : '');
+      $('#refLowText').textContent = Number(Calc.refLow(veh)).toFixed(1) + ' 升/百公里';
 
       // 车辆
       $('#vehicleRows').innerHTML = db.vehicles.map(function (v) {        var cur = v.id === db.currentVehicleId;
