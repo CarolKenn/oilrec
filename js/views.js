@@ -14,6 +14,7 @@
   function v0(x) { return x === null || x === undefined ? '--' : String(Math.round(x)); }
   function v1(x) { return x === null || x === undefined ? '--' : String(U.round(x, 1)); }
   function v2(x) { return x === null || x === undefined ? '--' : String(U.round(x, 2)); }
+  function v11(x) { return x === null || x === undefined ? '--' : Number(x).toFixed(1); }
 
   function statItem(label, value, unit, opts) {
     opts = opts || {};
@@ -47,9 +48,9 @@
 
       // 统计
       $('#statGrid').innerHTML =
-        statItem('平均油耗', v1(s.avgCons), '升/百公里', { acc: true, hint: '两次加满之间的加油量 ÷ 行驶里程 × 100' }) +
+        statItem('平均油耗', v11(s.avgCons), '升/百公里', { acc: true, hint: '两次加满之间的加油量 ÷ 行驶里程 × 100' }) +
         statItem('平均行程', v2(s.perDay), '公里/天', { hint: '区间内总行驶里程 ÷ 天数' }) +
-        statItem('平均油费', v1(s.perKm), '元/公里', { acc: true }) +
+        statItem('平均油费', v11(s.perKm), '元/公里', { acc: true }) +
         statItem('统计里程', v0(s.distance), '公里') +
         statItem('累计油费', v0(s.cost), '元') +
         statItem('总计优惠', v0(s.discount), '元');
@@ -109,7 +110,8 @@
           '<button class="rec-head" data-action="toggle-rec" data-id="' + r.id + '">' +
             '<span class="rec-bar"></span>' +
             '<span class="rec-date">' + U.slashDate(r.date) + '</span>' +
-            '<span class="rec-cons' + (high ? ' high' : '') + '">' + (r.cons === null ? '--' : v2(r.cons)) + '<em>升/百公里</em></span>' +
+            '<span class="rec-cons' + (high ? ' high' : '') + '">' + (r.cons === null ? '--' : v2(r.cons)) +
+            '<em>' + (r.cons === null && !r.fullTank ? '未加满' : '升/百公里') + '</em></span>' +
             '<span class="rec-odo">' + v1(r.odometer) + '<em>公里</em></span>' +
             '<svg class="ico ico-xs chev"><use href="#i-chevron-down"/></svg>' +
           '</button>' +

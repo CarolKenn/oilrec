@@ -208,78 +208,170 @@
     return rows.filter(function (r) { return r.some(function (c) { return String(c).trim() !== ''; }); });
   }
 
+  /* 表头识别（顺序敏感：先匹配更具体的列名） */
+  var HEADER_RULES = [
+    [/日期时间|日期和时间|时间日期|datetime|date\s*time/i, 'datetime'],
+    [/加油时间|时间|time/i, 'time'],
+    [/日期|date/i, 'date'],
+    [/总里程|当前里程|里程表|里程|odometer|mileage/i, 'odometer'],
+    [/油耗|百公里|consumption/i, 'cons'],
+    [/机显单价|单价|油价|price/i, 'unitPrice'],
+    [/加油量|油量|升数|volume|litre|liter/i, 'volume'],
+    [/实付|pay\s*amount|paid/i, 'payAmount'],
+    [/优惠|减免|折扣|discount/i, 'discount'],
+    [/机显金额|金额|费用|花费|amount|total/i, 'amount'],
+    [/加油站|station/i, 'station'],
+    [/油号|标号|油品|燃油|fuel/i, 'fuelType'],
+    [/加满|跳枪|full/i, 'fullTank'],
+    [/亮灯|油灯|warn|low\s*fuel/i, 'warnLight'],
+    [/漏记|没记录|miss|skip/i, 'lastRecorded'],
+    [/备注|note|remark|memo/i, 'note']
+  ];
+
   function mapHeader(h) {
-    h = String(h || '').trim();
-    var rules = [
-      [/日期|时间|date/i, 'date'],
-      [/当前里程|总里程|里程|odometer|mileage/i, 'odometer'],
-      [/油耗|百公里|consumption/i, 'cons'],
-      [/单价|price/i, 'unitPrice'],
-      [/加油量|油量|升|volume|litre|liter/i, 'volume'],
-      [/实付金额|实付|payAmount/i, 'payAmount'],
-      [/优惠|discount/i, 'discount'],
-      [/金额|amount|费用|花费/i, 'amount'],
-      [/加油站|station/i, 'station'],
-      [/标号|油品|燃油|fuel/i, 'fuelType'],
-      [/备注|note|remark/i, 'note']
-    ];
-    for (var i = 0; i < rules.length; i++) if (rules[i][0].test(h)) return rules[i][1];
+    var s = String(h === null || h === undefined ? '' : h).replace(/\s+/g, ' ').trim();
+    if (!s || s.length > 24) return null;
+    for (var i = 0; i < HEADER_RULES.length; i++) {
+      if (HEADER_RULES[i][0].test(s)) return HEADER_RULES[i][1];
+    }
     return null;
   }
 
   function normalizeDate(v) {
-    v = String(v || '').trim();
-    var m = v.match(/(\d{4})[-/.年](\d{1,2})[-/.月](\d{1,2})/);
-    if (m) return m[1] + '-' + U.pad2(+m[2]) + '-' + U.pad2(+m[3]);
-    if (/^\d{5}$/.test(v)) {
-      // excel 序列号
-      var d = new Date(Date.UTC(1899, 11, 30) + (+v) * 86400000);
+    var s = String(v === null || v === undefined ? '' : v).trim();
+    if (!s) return '';
+    var m = s.match(/(\d{4})[-/.年](\d{1,2})[-/.月](\d{1,2})/);
+    if (m && +m[2] >= 1 && +m[2] <= 12 && +m[3] >= 1 && +m[3] <= 31) {
+      return m[1] + '-' + U.pad2(+m[2]) + '-' + U.pad2(+m[3]);
+    }
+    m = s.match(/^(\d{4})(\d{2})(\d{2})$/);
+    if (m && +m[2] >= 1 && +m[2] <= 12 && +m[3] >= 1 && +m[3] <= 31) {
+      return m[1] + '-' + m[2] + '-' + m[3];
+    }
+    var n = Number(s);
+    if (isFinite(n) && n > 20000 && n < 80000) {
+      // Excel 序列号（1899-12-30 起算）
+      var d = new Date(Date.UTC(1899, 11, 30) + Math.round(n * 86400000));
       return d.getUTCFullYear() + '-' + U.pad2(d.getUTCMonth() + 1) + '-' + U.pad2(d.getUTCDate());
     }
     return '';
   }
 
-  function csvToRecords(text) {
-    var rows = parseCSV(text);
-    if (rows.length < 2) return [];
-    var header = rows[0].map(mapHeader);
-    var idx = {};
-    header.forEach(function (key, i) { if (key && idx[key] === undefined) idx[key] = i; });
-    if (idx.date === undefined || idx.odometer === undefined) return null;
+  function normalizeTime(v) {
+    var s = String(v === null || v === undefined ? '' : v).trim();
+    if (!s) return '';
+    var m = s.match(/(\d{1,2}):(\d{2})/);
+    if (m && +m[1] < 24 && +m[2] < 60) return U.pad2(+m[1]) + ':' + U.pad2(+m[2]);
+    var n = Number(s);
+    if (isFinite(n) && n > 0 && n < 1) {
+      var mins = Math.round(n * 1440) % 1440;
+      return U.pad2(Math.floor(mins / 60)) + ':' + U.pad2(mins % 60);
+    }
+    // Excel 日期序列号的小数部分即时间：46027.3958 → 09:30
+    if (isFinite(n) && n > 20000 && n < 80000) {
+      var frac = n - Math.floor(n);
+      if (frac > 0.0007) {
+        var mi = Math.round(frac * 1440) % 1440;
+        return U.pad2(Math.floor(mi / 60)) + ':' + U.pad2(mi % 60);
+      }
+    }
+    return '';
+  }
+
+  function truthy(v, def) {
+    var s = String(v === null || v === undefined ? '' : v).trim().toLowerCase();
+    if (!s) return def;
+    if (/没有|没记录|未|否|^无|false|^0(\.0+)?$|^n$|^no$|^[×x-]$/.test(s)) return false;
+    if (/是|有|亮|已|跳枪|满|true|^1(\.0+)?$|^y$|^yes$|^[√✓v]$/.test(s)) return true;
+    return def;
+  }
+
+  function normalizeFuel(v) {
+    var s = String(v === null || v === undefined ? '' : v).trim().replace(/\s+/g, '').replace(/号/g, '#');
+    if (!s) return '95#汽油';
+    var fuels = (w.Oil && w.Oil.FUELS) || [];
+    for (var i = 0; i < fuels.length; i++) if (fuels[i] === s) return s;
+    if (/汽油|柴油/.test(s)) return s;
+    if (/^-?10#?/.test(s)) return '-10#柴油';
+    if (/^0#?$/.test(s)) return '0#柴油';
+    var m = s.match(/(92|95|98)/);
+    if (m) return m[1] + '#汽油';
+    return s;
+  }
+
+  function cellOf(row, i) {
+    if (!row || i === undefined || i === null || i < 0) return '';
+    var v = row[i];
+    return (v === undefined || v === null) ? '' : v;
+  }
+
+  /* 把二维表格（CSV 或 xlsx）转成记录数组；无法识别表头时返回 null */
+  function rowsToRecords(rows) {
+    if (!rows || !rows.length) return [];
+    var headerAt = -1, idx = null, i, c;
+    var limit = Math.min(rows.length, 15);
+    for (i = 0; i < limit; i++) {
+      var row = rows[i] || [];
+      var map = {};
+      for (c = 0; c < row.length; c++) {
+        var key = mapHeader(row[c]);
+        if (key && map[key] === undefined) map[key] = c;
+      }
+      if (map.odometer !== undefined && (map.date !== undefined || map.datetime !== undefined)) {
+        headerAt = i; idx = map; break;
+      }
+    }
+    if (headerAt < 0) return null;
+
     var out = [];
-    rows.slice(1).forEach(function (r) {
-      var date = normalizeDate(r[idx.date]);
-      if (!date) return;
-      var odo = U.num(r[idx.odometer]);
-      if (!odo) return;
-      var volume = idx.volume !== undefined ? U.num(r[idx.volume]) : 0;
-      var unitPrice = idx.unitPrice !== undefined ? U.num(r[idx.unitPrice]) : 0;
-      var amount = idx.amount !== undefined ? U.num(r[idx.amount]) : 0;
-      var pay = idx.payAmount !== undefined && U.num(r[idx.payAmount]) ? U.num(r[idx.payAmount]) : (amount || U.round(volume * unitPrice, 2));
+    for (var r = headerAt + 1; r < rows.length; r++) {
+      var line = rows[r] || [];
+      var rawDate = idx.datetime !== undefined ? cellOf(line, idx.datetime) : cellOf(line, idx.date);
+      var date = normalizeDate(rawDate);
+      if (!date && idx.date !== undefined) date = normalizeDate(cellOf(line, idx.date));
+      if (!date) continue;
+      var time = normalizeTime(rawDate) || normalizeTime(cellOf(line, idx.time));
+      var odo = U.num(cellOf(line, idx.odometer));
+      if (!odo) continue;
+
+      var volume = U.num(cellOf(line, idx.volume));
+      var unitPrice = U.num(cellOf(line, idx.unitPrice));
+      var amount = U.num(cellOf(line, idx.amount));
+      var pay = U.num(cellOf(line, idx.payAmount));
       if (!amount) amount = U.round(volume * unitPrice, 2) || pay;
-      if (!unitPrice && volume) unitPrice = U.round(pay / volume, 2);
+      if (!pay) pay = amount;
+      if (!unitPrice && volume) unitPrice = U.round(amount / volume, 2);
+      if (!volume && amount && unitPrice) volume = U.round(amount / unitPrice, 2);
+
+      var discount = idx.discount !== undefined ? U.num(cellOf(line, idx.discount)) : 0;
+      if (!discount && amount > pay) discount = U.round(amount - pay, 2);
+
       out.push({
         id: U.uid(),
         date: date,
-        time: '08:00',
+        time: time || '08:00',
         odometer: odo,
         volume: volume,
         unitPrice: unitPrice,
         amount: U.round(amount, 2),
-        discount: idx.discount !== undefined ? U.num(r[idx.discount]) : 0,
-        payPrice: volume ? U.round(pay / volume, 2) : 0,
+        discount: U.round(discount, 2),
+        payPrice: volume ? U.round(pay / volume, 2) : unitPrice,
         payAmount: U.round(pay, 2),
-        fullTank: true,
-        warnLight: false,
-        lastRecorded: true,
-        station: idx.station !== undefined ? String(r[idx.station] || '') : '',
-        fuelType: idx.fuelType !== undefined ? String(r[idx.fuelType] || '95#汽油') : '95#汽油',
-        note: idx.note !== undefined ? String(r[idx.note] || '') : '',
+        fullTank: idx.fullTank !== undefined ? truthy(cellOf(line, idx.fullTank), true) : true,
+        warnLight: idx.warnLight !== undefined ? truthy(cellOf(line, idx.warnLight), false) : false,
+        lastRecorded: idx.lastRecorded !== undefined ? !truthy(cellOf(line, idx.lastRecorded), false) : true,
+        station: String(cellOf(line, idx.station) || ''),
+        fuelType: normalizeFuel(cellOf(line, idx.fuelType)),
+        note: String(cellOf(line, idx.note) || ''),
         photo: '',
-        createdAt: Date.now()
+        createdAt: new Date(date + 'T00:00:00').getTime() + out.length
       });
-    });
+    }
     return out;
+  }
+
+  function csvToRecords(text) {
+    return rowsToRecords(parseCSV(text));
   }
 
   /* ---------- 对外方法 ---------- */
@@ -330,6 +422,37 @@
 
     readFile: function (file, done) {
       var name = (file.name || '').toLowerCase();
+
+      /* Excel：二进制解析（unzip + inflate + sheet xml） */
+      if (/\.(xlsx|xlsm|xltx)$/.test(name)) {
+        var fr = new FileReader();
+        fr.onload = function () {
+          var recs = null, firstOk = null;
+          try {
+            if (!w.XLSX) throw new Error('解析组件未加载');
+            var sheets = w.XLSX.readSheets(new Uint8Array(fr.result));
+            for (var i = 0; i < sheets.length; i++) {
+              var cand = rowsToRecords(sheets[i].rows);
+              if (cand === null) continue;
+              if (firstOk === null) firstOk = cand;
+              if (cand.length) { recs = cand; break; }
+            }
+            if (recs === null) recs = firstOk;
+          } catch (err) {
+            return done({ error: 'Excel 解析失败：' + ((err && err.message) || '文件可能已损坏') });
+          }
+          if (recs === null) return done({ error: 'Excel 中未找到“日期”和“里程”列' });
+          if (!recs.length) return done({ error: 'Excel 中没有可导入的记录' });
+          done({ records: recs, source: 'xlsx' });
+        };
+        fr.onerror = function () { done({ error: '文件读取失败' }); };
+        fr.readAsArrayBuffer(file);
+        return;
+      }
+      if (/\.xls$/.test(name)) {
+        return done({ error: '不支持旧版 .xls，请另存为 .xlsx 或 .csv' });
+      }
+
       var reader = new FileReader();
       reader.onload = function () {
         var text = String(reader.result || '');
@@ -342,9 +465,6 @@
           } catch (e) {
             return done({ error: 'JSON 解析失败，请检查文件' });
           }
-        }
-        if (/\.xlsx?$/.test(name)) {
-          return done({ error: '暂不支持直接读取 Excel，请在 Excel/WPS 中“另存为 CSV”后导入' });
         }
         var recs = csvToRecords(text);
         if (recs === null) return done({ error: '未识别到“日期”和“里程”列，请检查表头' });
