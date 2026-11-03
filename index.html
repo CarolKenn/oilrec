@@ -54,14 +54,17 @@
       <div class="card latest-card">
         <button class="latest-head" data-action="go" data-view="list">
           <span>最新油耗</span>
+          <i class="est-badge" id="latestTag" hidden>估算</i>
           <svg class="ico ico-xs"><use href="#i-chevron-right"/></svg>
         </button>
         <div class="latest-row">
           <div class="latest-num">
+            <span class="est-mark" id="latestMark" hidden>≈</span>
             <b id="latestValue">--</b><em>升/百公里</em>
           </div>
-          <div class="latest-rate" id="latestRate">暂不能评级</div>
+          <div class="latest-rate" id="latestRate">暂不能计算</div>
         </div>
+        <p class="latest-note" id="latestNote"></p>
       </div>
     </div>
 
@@ -190,13 +193,14 @@
 
         <div class="field-row between">
           <label>是否加满跳枪？
-            <button class="q" data-action="hint" data-hint="跳枪即加满。只有连续两次加满之间的数据才能准确计算油耗。">?</button>
+            <button class="q" data-action="hint" data-hint="跳枪即加满。加满时精确结算油耗；没加满也能记，油量会累计到下次加满时一起算。">?</button>
           </label>
           <div class="seg" id="segFull">
             <button type="button" data-val="1">已跳枪</button>
             <button type="button" data-val="0">未跳枪</button>
           </div>
         </div>
+        <p class="hint-line" id="fullHint"></p>
         <div class="field-row between">
           <label>油量警告灯亮了吗？
             <button class="q" data-action="hint" data-hint="加油前油灯是否已经亮起，用于判断加油时机。">?</button>
