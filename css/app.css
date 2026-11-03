@@ -158,14 +158,6 @@ h1, h2, h3, p { margin: 0; }
   background: var(--card);
   border-top: 1px solid var(--line);
   z-index: 30;
-  transition: transform 0.22s ease;
-}
-.phone.entry-open .tabbar {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  transform: translateY(112%);
 }
 
 .tab {
@@ -869,7 +861,7 @@ textarea:focus { border-color: var(--acc); }
 
 .entry-foot {
   flex: none;
-  padding: 10px 16px calc(10px + env(safe-area-inset-bottom, 0px));
+  padding: 10px 16px 12px;
   background: var(--card);
   border-top: 1px solid var(--line);
 }
