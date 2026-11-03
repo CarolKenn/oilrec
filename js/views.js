@@ -57,7 +57,7 @@
 
       // 参考线
       var refLow = settings.refLow;
-      $('#refLegend').textContent = (settings.region || '内江市') + '油耗参考-低位';
+      $('#refLegend').textContent = '油耗参考-低位';
 
       w.Chart.line($('#trendChart'), {
         points: Calc.trend(items, range),
@@ -97,7 +97,7 @@
 
       var rows = desc.filter(function (r) { return Calc.inRange(r, range); });
       if (!rows.length) {
-        $('#recList').innerHTML = '<div class="empty"><b>这个区间还没有记录</b>点击底部 ＋ 记一笔加油</div>';
+        $('#recList').innerHTML = '<div class="empty"><b>这个区间还没有记录</b>点底部「记录」记一笔</div>';
         return;
       }
       var expanded = w.App.state.expanded;
@@ -158,7 +158,6 @@
         b.classList.toggle('on', b.dataset.val === db.settings.accent);
       });
 
-      $('#regionText').textContent = db.settings.region || '内江市';
       $('#refText').textContent = v1(db.settings.refLow) + ' 升/百公里';
 
       // 车辆
@@ -231,8 +230,103 @@
         pay: rec ? Math.abs(rec.payAmount - (rec.amount - (rec.discount || 0))) > 0.02 : false
       };
       $('#entryScroll').scrollTop = 0;
+    },
+
+    /* ---------------- 我的统计 ---------------- */
+    stats: function () {
+      var items = Calc.index(Store.records());
+      var st = w.App.state.stats;
+      var range = statsRange(st);
+
+      $$('#segStats button').forEach(function (b) {
+        b.classList.toggle('on', b.dataset.val === st.mode);
+      });
+      var custom = st.mode === 'custom';
+      $('#statsCtrl').hidden = custom;
+      $('#statsCustom').hidden = !custom;
+      $('#statsFrom').value = st.from || '';
+      $('#statsTo').value = st.to || '';
+      if (st.mode === 'month') {
+        $('#statsTitle').textContent = st.ym.slice(0, 4) + '年' + (+st.ym.slice(5, 7)) + '月';
+      } else if (st.mode === 'year') {
+        $('#statsTitle').textContent = st.year + '年';
+      }
+
+      var s = Calc.summarize(items, range);
+      var rows = [], count = 0, fuel = 0, pay = 0;
+      items.forEach(function (r) {
+        if (!Calc.inRange(r, range)) return;
+        count++;
+        fuel += U.num(r.volume);
+        pay += U.num(r.payAmount) || U.num(r.amount);
+        rows.push(r);
+      });
+      var avgPrice = fuel > 0 ? pay / fuel : null;
+
+      $('#statsGrid').innerHTML =
+        statItem('加油次数', String(count), '次') +
+        statItem('累计油费', v2(pay), '元', { acc: true }) +
+        statItem('累计油量', v2(fuel), '升') +
+        statItem('行驶里程', v0(s.distance), '公里') +
+        statItem('平均油耗', v11(s.avgCons), '升/百公里', {
+          acc: true, hint: '两次加满之间的加油量 ÷ 行驶里程 × 100'
+        }) +
+        statItem('每公里油费', s.perKm === null ? '--' : v2(s.perKm), '元/公里') +
+        statItem('平均油价', avgPrice === null ? '--' : v2(avgPrice), '元/升') +
+        statItem('日均里程', v2(s.perDay), '公里/天') +
+        statItem('单次油费', count ? v2(pay / count) : '--', '元/次');
+
+      var list = $('#statsList');
+      $('#statsListTitle').textContent = st.mode === 'month' ? '本期明细' : '按月汇总';
+      if (!count) {
+        list.innerHTML = '<div class="stats-empty">该区间没有加油记录</div>';
+        return;
+      }
+
+      if (st.mode === 'month') {
+        var head = '<div class="stats-row head"><span>日期</span><span>里程</span><span>加油量</span><span>金额</span></div>';
+        var body = rows.slice().reverse().map(function (r) {
+          return '<div class="stats-row">' +
+            '<span>' + U.shortDate(r.date) + '</span>' +
+            '<span>' + v0(r.odometer) + '</span>' +
+            '<span>' + v2(r.volume) + ' 升</span>' +
+            '<span class="acc">' + v2(r.payAmount || r.amount) + ' 元</span>' +
+            '</div>';
+        }).join('');
+        list.innerHTML = head + body;
+      } else {
+        var buckets = {}, order = [];
+        rows.forEach(function (r) {
+          var key = String(r.date).slice(0, 7);
+          if (!buckets[key]) { buckets[key] = { n: 0, fuel: 0, pay: 0 }; order.push(key); }
+          var b = buckets[key];
+          b.n++;
+          b.fuel += U.num(r.volume);
+          b.pay += U.num(r.payAmount) || U.num(r.amount);
+        });
+        order.sort().reverse();
+        var head2 = '<div class="stats-row head"><span>月份</span><span>次数</span><span>加油量</span><span>金额</span></div>';
+        var body2 = order.map(function (k) {
+          var b = buckets[k];
+          return '<div class="stats-row">' +
+            '<span>' + k.slice(0, 4) + '年' + (+k.slice(5, 7)) + '月</span>' +
+            '<span>' + b.n + ' 次</span>' +
+            '<span>' + v0(b.fuel) + ' 升</span>' +
+            '<span class="acc">' + v0(b.pay) + ' 元</span>' +
+            '</div>';
+        }).join('');
+        list.innerHTML = head2 + body2;
+      }
     }
   };
+
+  function statsRange(st) {
+    if (st.mode === 'year') return { type: 'year', year: String(st.year) };
+    if (st.mode === 'custom') return { type: 'custom', from: st.from, to: st.to };
+    var y = +String(st.ym).slice(0, 4), m = +String(st.ym).slice(5, 7);
+    var last = new Date(y, m, 0).getDate();
+    return { type: 'custom', from: st.ym + '-01', to: st.ym + '-' + U.pad2(last) };
+  }
 
   function setSeg(sel, val) {
     $$(sel + ' button').forEach(function (b) {

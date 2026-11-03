@@ -18,6 +18,7 @@
         list: { type: 'year', year: String(new Date().getFullYear()) },
         bar: { type: 'year', year: String(new Date().getFullYear()) }
       },
+      stats: { mode: 'month', ym: '', year: '', from: '', to: '' },
       expanded: {},
       editing: null,
       photo: '',
@@ -31,6 +32,7 @@
       Store.init();
       this.applyTheme();
       this.initRanges();
+      this.initStats();
       this.bind();
       try { history.replaceState({ view: 'home' }, ''); } catch (e) { /* noop */ }
       this.go('home');
@@ -60,6 +62,33 @@
       this.state.ranges.bar = { type: 'year', year: y };
     },
 
+    initStats: function () {
+      var items = Calc.index(Store.records());
+      var last = items.length ? items[items.length - 1] : null;
+      var now = new Date();
+      var ym = last ? String(last.date).slice(0, 7) : (now.getFullYear() + '-' + U.pad2(now.getMonth() + 1));
+      var st = this.state.stats;
+      st.ym = ym;
+      st.year = ym.slice(0, 4);
+      if (!st.from || !st.to) {
+        st.from = ym + '-01';
+        st.to = U.todayStr();
+      }
+      if (st.from > st.to) { var t = st.from; st.from = st.to; st.to = t; }
+    },
+
+    shiftStats: function (dir) {
+      var st = this.state.stats;
+      if (st.mode === 'month') {
+        var y = +String(st.ym).slice(0, 4), m = +String(st.ym).slice(5, 7) - 1 + dir;
+        var d = new Date(y, m, 1);
+        st.ym = d.getFullYear() + '-' + U.pad2(d.getMonth() + 1);
+      } else if (st.mode === 'year') {
+        st.year = String(+st.year + dir);
+      }
+      w.Views.stats();
+    },
+
     applyTheme: function () {
       var s = Store.settings();
       document.documentElement.dataset.theme = s.theme || 'light';
@@ -83,7 +112,8 @@
         v.classList.toggle('active', v.dataset.view === view);
       });
       $$('.tab').forEach(function (t) {
-        t.classList.toggle('active', t.dataset.view === view);
+        var on = t.dataset.view === view || (view === 'stats' && t.dataset.view === 'me');
+        t.classList.toggle('active', on);
       });
       $('#phone').classList.toggle('entry-open', view === 'entry');
       this.render(view);
@@ -99,6 +129,7 @@
       if (view === 'home') w.Views.home();
       else if (view === 'list') w.Views.list();
       else if (view === 'me') w.Views.me();
+      else if (view === 'stats') w.Views.stats();
     },
 
     toast: function (msg) {
@@ -116,7 +147,12 @@
         var el = e.target.closest ? e.target.closest('[data-action]') : null;
         if (!el) return;
         var act = el.dataset.action;
-        if (act === 'go') { self.state.editing = null; self.go(el.dataset.view); return; }
+        if (act === 'go') {
+          self.state.editing = null;
+          if (el.dataset.view === 'entry') self.state.photo = '';
+          self.go(el.dataset.view);
+          return;
+        }
         if (act === 'new-record') {
           self.state.editing = null;
           self.state.photo = '';
@@ -147,15 +183,6 @@
         if (act === 'clear-all') { self.closeAll(); self.clearAll(); return; }
         if (act === 'pick-photo') { $('#photoInput').click(); return; }
         if (act === 'hint') { self.toast(el.dataset.hint || ''); return; }
-        if (act === 'edit-region') {
-          self.prompt('参考地区', Store.settings().region || '内江市', function (name) {
-            Store.settings().region = name;
-            Store.persist();
-            w.Views.me();
-            self.toast('已更新参考地区');
-          });
-          return;
-        }
         if (act === 'edit-ref') {
           self.prompt('低位参考油耗（升/百公里）', String(Store.settings().refLow || 7.5), function (val) {
             var n = U.num(val);
@@ -167,6 +194,9 @@
           });
           return;
         }
+        if (act === 'stats-back') { self.go('me'); return; }
+        if (act === 'stats-prev') { self.shiftStats(-1); return; }
+        if (act === 'stats-next') { self.shiftStats(1); return; }
         if (act === 'strip') {
           var box = $('#summaryStrip');
           box.scrollLeft += (+el.dataset.dir) * 150;
@@ -206,6 +236,33 @@
         self.applyTheme();
         w.Views.me();
         self.toast('强调色已切换');
+      });
+
+      /* 我的统计：模式切换 & 自定义区间 */
+      var segStats = $('#segStats');
+      if (segStats) {
+        segStats.addEventListener('click', function (e) {
+          var b = e.target.closest('button');
+          if (!b || !b.dataset.val) return;
+          var st = self.state.stats;
+          st.mode = b.dataset.val;
+          if (st.mode === 'custom' && (!st.from || !st.to)) {
+            st.from = st.ym + '-01';
+            st.to = U.todayStr();
+          }
+          w.Views.stats();
+        });
+      }
+      ['#statsFrom', '#statsTo'].forEach(function (sel) {
+        var el = $(sel);
+        if (!el) return;
+        el.addEventListener('change', function () {
+          var st = self.state.stats;
+          st.from = $('#statsFrom').value || st.from;
+          st.to = $('#statsTo').value || st.to;
+          if (st.from > st.to) self.toast('开始日期不能晚于结束日期');
+          w.Views.stats();
+        });
       });
 
       /* 记账表单联动 */
@@ -259,6 +316,7 @@
             var ok = Store.importJSON(res.records);
             if (!ok) { self.toast('文件中没有可用记录'); return; }
             self.initRanges();
+            self.initStats();
             self.render();
             self.toast('已导入 ' + n + ' 条记录');
           });
@@ -417,6 +475,7 @@
       this.state.editing = null;
       this.state.expanded = {};
       this.initRanges();
+      this.initStats();
       this.render();
       this.toast('已切换到 ' + (Store.vehicle() || {}).name);
     },

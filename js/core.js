@@ -116,7 +116,7 @@
     }
     return {
       version: 1,
-      settings: { theme: 'light', accent: 'green', region: '内江市', refLow: 7.5 },
+      settings: { theme: 'light', accent: 'green', refLow: 7.5 },
       vehicles: [vehicle],
       currentVehicleId: vehicle.id,
       records: records
@@ -143,7 +143,7 @@
 
     migrate: function () {
       var db = this.db;
-      db.settings = Object.assign({ theme: 'light', accent: 'green', region: '内江市', refLow: 7.5 }, db.settings || {});
+      db.settings = Object.assign({ theme: 'light', accent: 'green', refLow: 7.5 }, db.settings || {});
       if (!db.vehicles.length) db.vehicles.push({ id: 'v1', name: '默认车辆', plate: '', model: '' });
       if (!this.vehicle()) db.currentVehicleId = db.vehicles[0].id;
       db.records = db.records.filter(function (r) { return r && r.date; }).map(function (r) {

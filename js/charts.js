@@ -25,6 +25,10 @@
     if (!isFinite(v)) return '';
     return Math.abs(v % 1) < 0.005 ? String(Math.round(v)) : v.toFixed(2);
   }
+  function axisNum(v) {
+    if (!isFinite(v)) return '';
+    return Math.abs(v % 1) < 0.05 ? String(Math.round(v)) : v.toFixed(1);
+  }
   function txt(x, y, str, opts) {
     opts = opts || {};
     return '<text x="' + x + '" y="' + y + '" fill="' + (opts.fill || '#9ca3af') +
@@ -149,7 +153,7 @@
         var y = yAt(v);
         svg.push('<line x1="' + padL + '" y1="' + y + '" x2="' + (W - padR) + '" y2="' + y +
           '" stroke="' + gridColor + '" stroke-width="1" stroke-dasharray="5 6"/>');
-        svg.push(txt(padL - 6, y + 3.5, v.toFixed(1), { anchor: 'end', fill: cssVar('--text-3', '#9ca3af') }));
+        svg.push(txt(padL - 6, y + 3.5, axisNum(v), { anchor: 'end', fill: cssVar('--text-3', '#9ca3af') }));
       }
 
       var slot = iw / 12;
@@ -166,23 +170,29 @@
             'h' + (barW - 2 * r) + 'q' + r + ' 0 ' + r + ' ' + r +
             'v' + (h - r) + 'h-' + barW + 'z';
           svg.push('<path d="' + path + '" fill="' + acc + '"/>');
-          labels.push({ cx: cx, y: y - 5, text: money(d.value), value: d.value });
+          labels.push({ cx: cx, y: y - 5, text: String(Math.round(d.value)), value: d.value });
         }
         svg.push(txt(cx, H - 8, d.month + '月', { size: 9.5, fill: cssVar('--text-3', '#9ca3af') }));
       });
 
-      // 数值标签：优先显示数值大的，避免小屏挤在一起
-      labels.sort(function (a, b) { return b.value - a.value; });
-      var placed = [];
+      /* 数值标签：按月顺序排，挤不下就往上叠一层，保证每个有数据的月份都能显示 */
+      labels.sort(function (a, b) { return a.cx - b.cx; });
+      var rows = [[], [], []];
       var textColor = cssVar('--text-2', '#6b7280');
       labels.forEach(function (lb) {
-        var w = lb.text.length * 5.4 + 3;
-        var l = lb.cx - w / 2, r = lb.cx + w / 2;
-        for (var i = 0; i < placed.length; i++) {
-          if (!(r < placed[i][0] || l > placed[i][1])) return;
+        var w = lb.text.length * 5 + 2;
+        var l = lb.cx - w / 2, r = l + w;
+        var row = 2;
+        for (var k = 0; k < rows.length; k++) {
+          var hit = false;
+          for (var i = 0; i < rows[k].length; i++) {
+            if (!(r < rows[k][i][0] || l > rows[k][i][1])) { hit = true; break; }
+          }
+          if (!hit) { row = k; break; }
         }
-        placed.push([l, r]);
-        svg.push(txt(lb.cx, lb.y, lb.text, { size: 9.5, fill: textColor }));
+        rows[row].push([l, r]);
+        var ty = Math.max(9, lb.y - row * 10.5);
+        svg.push(txt(lb.cx, ty, lb.text, { size: 9, fill: textColor }));
       });
 
       svg.push('</svg>');
