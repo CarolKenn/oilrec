@@ -287,13 +287,17 @@
     </div>
 
     <div class="card">
-      <h3 class="card-title">油耗参考</h3>
+      <h3 class="card-title">车辆参数</h3>
       <div class="row-list">
-        <button class="row" data-action="edit-ref">
-          <div class="row-main"><b>低位参考油耗</b><span id="refText">7.5 升/百公里</span></div>
+        <button class="row" data-action="edit-engine">
+          <div class="row-main">
+            <b>排量与进气形式</b>
+            <span id="engineText">2.0 L · 自然吸气</span>
+          </div>
           <svg class="ico ico-xs arrow"><use href="#i-chevron-right"/></svg>
         </button>
       </div>
+      <p class="param-note">参考低位油耗 <b id="refLowText">7.5 升/百公里</b>，用于首页参考线与油耗评级。数值按排量和进气形式自动估算，支持 ±0.5 微调，换车后可单独设置。</p>
     </div>
 
     <div class="card">
@@ -404,6 +408,37 @@
       <div class="modal-actions">
         <button class="btn-ghost" data-action="range-cancel">取消</button>
         <button class="btn-primary" data-action="range-ok">确定</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal" id="engineModal" hidden>
+    <div class="modal-mask" data-action="modal-close"></div>
+    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="engineTitle">
+      <h3 class="modal-title" id="engineTitle">车辆参数</h3>
+      <p class="modal-sub">排量</p>
+      <div class="chip-grid chip-grid-3" id="dispChips"></div>
+      <p class="modal-sub">进气形式</p>
+      <div class="seg seg-wide" id="segAsp">
+        <button type="button" data-val="na">自然吸气</button>
+        <button type="button" data-val="turbo">涡轮增压</button>
+      </div>
+      <p class="modal-sub">微调<em class="sub-hint">常跑高速可往下调，市区偏多可往上调</em></p>
+      <div class="offset-row">
+        <button type="button" class="offset-btn" data-step="-0.5" aria-label="减少 0.5">−</button>
+        <b id="offsetVal">0</b>
+        <em>升/百公里</em>
+        <button type="button" class="offset-btn" data-step="0.5" aria-label="增加 0.5">＋</button>
+      </div>
+      <div class="engine-preview">
+        <span>参考低位油耗</span>
+        <b id="enginePreview">7.5</b>
+        <em>升/百公里</em>
+      </div>
+      <p class="engine-hint" id="engineHint" hidden></p>
+      <div class="modal-actions">
+        <button class="btn-ghost" data-action="engine-cancel">取消</button>
+        <button class="btn-primary" data-action="engine-ok">确定</button>
       </div>
     </div>
   </div>
