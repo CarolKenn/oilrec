@@ -6,11 +6,11 @@
   <meta name="theme-color" content="#95BFDD" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="mobile-web-app-capable" content="yes" />
-  <meta name="apple-mobile-web-app-title" content="OILREC" />
+  <meta name="apple-mobile-web-app-title" content="油耗记录" />
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
   <meta name="format-detection" content="telephone=no,email=no,address=no" />
   <meta name="description" content="油耗记录 · 手机端油耗记账、趋势分析与数据导出" />
-  <title>OILREC</title>
+  <title>油耗记录</title>
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="icon" type="image/svg+xml" href="assets/icon.svg" />
   <link rel="apple-touch-icon" href="assets/icon.svg" />
@@ -78,6 +78,17 @@
 
     <div class="card">
       <div class="card-head">
+        <h2 class="with-bar">油费支出月度统计</h2>
+        <button class="range-chip" data-action="pick-range" data-scope="bar">
+          <span data-range-label="bar">2026</span>
+          <svg class="ico ico-xs"><use href="#i-swap"/></svg>
+        </button>
+      </div>
+      <div class="chart chart-bar" id="barChart"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-head">
         <h2>油耗变化趋势</h2>
         <button class="range-chip" data-action="pick-range" data-scope="home">
           <span data-range-label="home">全部</span>
@@ -86,20 +97,9 @@
       </div>
       <div class="legend">
         <span class="lg"><i class="lg-line accent"></i>油耗</span>
-        <span class="lg"><i class="lg-line ref"></i><span id="refLegend">市油耗参考-低位</span></span>
+        <span class="lg"><i class="lg-line ref"></i><span id="refLegend">油耗参考-低位</span></span>
       </div>
       <div class="chart chart-trend" id="trendChart"></div>
-    </div>
-
-    <div class="card">
-      <div class="card-head">
-        <h2 class="with-bar">油费支出月度统计</h2>
-        <button class="range-chip" data-action="pick-range" data-scope="bar">
-          <span data-range-label="bar">2026</span>
-          <svg class="ico ico-xs"><use href="#i-swap"/></svg>
-        </button>
-      </div>
-      <div class="chart chart-bar" id="barChart"></div>
     </div>
     <div class="scroll-pad"></div>
   </section>
@@ -289,12 +289,18 @@
     <div class="card">
       <h3 class="card-title">油耗参考</h3>
       <div class="row-list">
-        <button class="row" data-action="edit-region">
-          <div class="row-main"><b>参考地区</b><span id="regionText">内江市</span></div>
-          <svg class="ico ico-xs arrow"><use href="#i-chevron-right"/></svg>
-        </button>
         <button class="row" data-action="edit-ref">
           <div class="row-main"><b>低位参考油耗</b><span id="refText">7.5 升/百公里</span></div>
+          <svg class="ico ico-xs arrow"><use href="#i-chevron-right"/></svg>
+        </button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3 class="card-title">我的统计</h3>
+      <div class="row-list">
+        <button class="row" data-action="go" data-view="stats">
+          <div class="row-main"><b>统计报表</b><span>按月 / 按年 / 自定义区间查看汇总</span></div>
           <svg class="ico ico-xs arrow"><use href="#i-chevron-right"/></svg>
         </button>
       </div>
@@ -334,12 +340,53 @@
     <input type="file" id="importInput" accept=".xlsx,.xlsm,.csv,.json,.txt" hidden />
   </section>
 
+  <!-- ================= STATS ================= -->
+  <section class="view" id="view-stats" data-view="stats">
+    <header class="nav nav-sticky">
+      <button class="nav-btn" data-action="stats-back" aria-label="返回"><svg class="ico"><use href="#i-chevron-left"/></svg></button>
+      <h1>我的统计</h1>
+      <div class="nav-right">
+        <button class="nav-btn" data-action="open-menu" aria-label="更多"><svg class="ico"><use href="#i-dots"/></svg></button>
+      </div>
+    </header>
+
+    <div class="list-pad">
+      <div class="card stats-card">
+        <div class="seg seg-full" id="segStats">
+          <button type="button" data-val="month" class="on">按月</button>
+          <button type="button" data-val="year">按年</button>
+          <button type="button" data-val="custom">自定义</button>
+        </div>
+        <div class="stats-ctrl" id="statsCtrl">
+          <button class="stats-nav" data-action="stats-prev" aria-label="上一期"><svg class="ico"><use href="#i-chevron-left"/></svg></button>
+          <b id="statsTitle">2026年11月</b>
+          <button class="stats-nav" data-action="stats-next" aria-label="下一期"><svg class="ico"><use href="#i-chevron-right"/></svg></button>
+        </div>
+        <div class="custom-range stats-range" id="statsCustom" hidden>
+          <input type="date" id="statsFrom" />
+          <span>至</span>
+          <input type="date" id="statsTo" />
+        </div>
+      </div>
+
+      <div class="card">
+        <h3 class="card-title">区间统计</h3>
+        <div class="stat-grid" id="statsGrid"></div>
+      </div>
+
+      <div class="card">
+        <h3 class="card-title" id="statsListTitle">本期明细</h3>
+        <div class="stats-list" id="statsList"></div>
+      </div>
+      <div class="scroll-pad"></div>
+    </div>
+  </section>
+
   <!-- ================= TABBAR ================= -->
   <nav class="tabbar" id="tabbar">
     <button class="tab" data-action="go" data-view="home"><svg class="ico"><use href="#i-drop"/></svg><span>油耗</span></button>
     <button class="tab" data-action="go" data-view="list"><svg class="ico"><use href="#i-list"/></svg><span>详单</span></button>
-    <button class="tab tab-plus" data-action="new-record" aria-label="记一笔"><span class="plus"><svg class="ico"><use href="#i-plus"/></svg></span></button>
-    <button class="tab" data-action="go" data-view="entry"><svg class="ico"><use href="#i-fuel"/></svg><span>加油</span></button>
+    <button class="tab" data-action="go" data-view="entry"><svg class="ico"><use href="#i-fuel"/></svg><span>记录</span></button>
     <button class="tab" data-action="go" data-view="me"><svg class="ico"><use href="#i-bear"/></svg><span>我的</span></button>
   </nav>
 
