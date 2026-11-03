@@ -561,6 +561,15 @@ html[data-theme="dark"] .hero-hint { color: rgba(220, 232, 242, 0.55); }
 }
 .rec-cons em { font-style: normal; font-size: 10px; font-weight: 400; color: var(--text-3); margin-left: 1px; }
 .rec-cons.high { color: var(--danger); }
+.rec-cons.live { color: var(--text-2); font-weight: 500; }
+.rec-cons.live em { color: var(--text-3); margin-left: 3px; }
+.rec-cons .apx {
+  font-style: normal;
+  font-weight: 400;
+  font-size: 13px;
+  color: var(--text-3);
+  margin-right: 1px;
+}
 .rec-odo {
   font-size: 14px;
   font-variant-numeric: tabular-nums;
