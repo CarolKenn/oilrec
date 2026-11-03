@@ -210,6 +210,7 @@
         if (!b) return;
         $$('button', b.parentNode).forEach(function (x) { x.classList.remove('on'); });
         b.classList.add('on');
+        if (b.parentNode.id === 'segFull') w.Views.fullHint(b.dataset.val === '1');
       });
 
       /* 主题 / 强调色 */

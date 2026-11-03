@@ -27,6 +27,33 @@
       '</div>';
   }
 
+  var HINT_CONS = '两次加满之间的加油量 ÷ 行驶里程 × 100；一次都没加满时（≈）按累计加油量 ÷ 累计里程估算';
+
+  // 区间平均油耗口径：实测优先，无满箱结算时用估算
+  function consInfo(s) {
+    if (s.avgCons !== null) return { value: s.avgCons, est: false };
+    if (s.estCons != null) return { value: s.estCons, est: true };
+    return { value: null, est: false };
+  }
+
+  function fmtKm(x) {
+    return String(Math.round(x)).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  }
+
+  function latestNote(info) {
+    if (info.value === null) {
+      if (info.total < 2) return '从第 2 次加油起可以估算，连续两次加满可精确结算';
+      return '累计里程还太少，达到 100 公里后自动估算';
+    }
+    if (!info.estimated) {
+      var t = U.slashDate(info.date) + ' 加满结算';
+      if (info.pending > 0) t += ' · 之后还有 ' + info.pending + ' 次未加满，暂未计入';
+      return t;
+    }
+    var sp = info.sample;
+    return '按最近 ' + fmtKm(sp.dist) + ' 公里的累计加油量估算';
+  }
+
   var Views = {
     /* ---------------- 首页 ---------------- */
     home: function () {
@@ -40,15 +67,23 @@
 
       var s = Calc.summarize(items, range);
       var settings = Store.settings();
+      var refLow = Calc.refLow(veh);
 
-      // 最新油耗
-      var last = Calc.latest(items);
-      $('#latestValue').textContent = last ? v2(last.cons) : '--';
-      $('#latestRate').textContent = last ? Calc.rating(last.cons, items.length, Calc.refLow(veh)) : '暂不能评级';
+      // 最新油耗：满箱实测优先，没有满箱结算时按累计估算兜底
+      var info = Calc.latestInfo(items);
+      var hasVal = info.value !== null;
+      $('#latestMark').hidden = !(hasVal && info.estimated);
+      $('#latestTag').hidden = !(hasVal && info.estimated);
+      $('#latestValue').textContent = hasVal ? v2(info.value) : '--';
+      $('#latestRate').textContent = hasVal
+        ? (info.estimated ? '仅供参考' : Calc.rating(info.value, items.length, refLow))
+        : '暂不能计算';
+      $('#latestNote').textContent = latestNote(info);
 
       // 统计
+      var ci = consInfo(s);
       $('#statGrid').innerHTML =
-        statItem('平均油耗', v11(s.avgCons), '升/百公里', { acc: true, hint: '两次加满之间的加油量 ÷ 行驶里程 × 100' }) +
+        statItem('平均油耗', (ci.est ? '≈' : '') + v11(ci.value), '升/百公里', { acc: true, hint: HINT_CONS }) +
         statItem('平均行程', v2(s.perDay), '公里/天', { hint: '区间内总行驶里程 ÷ 天数' }) +
         statItem('平均油费', v11(s.perKm), '元/公里', { acc: true }) +
         statItem('统计里程', v0(s.distance), '公里') +
@@ -56,12 +91,12 @@
         statItem('总计优惠', v0(s.discount), '元');
 
       // 参考线（按当前车辆排量 / 进气形式估算）
-      var refLow = Calc.refLow(veh);
       $('#refLegend').textContent = '参考低位 ' + Number(refLow).toFixed(1);
 
       w.Chart.line($('#trendChart'), {
         points: Calc.trend(items, range),
-        refLow: refLow
+        refLow: refLow,
+        empty: items.length ? '还没有加满结算的记录，加满两次后自动生成' : '暂无油耗数据'
       });
 
       var barYear = w.App.state.ranges.bar.year || String(new Date().getFullYear());
@@ -82,9 +117,10 @@
       $$('[data-range-label="list"]').forEach(function (el) { el.textContent = label; });
 
       var s = Calc.summarize(asc, range);
+      var ci = consInfo(s);
       var strip = [
         { k: '累计花费', v: v0(s.cost), u: '元', acc: true },
-        { k: '平均油耗', v: v2(s.avgCons), u: '升/百公里', acc: true },
+        { k: '平均油耗', v: (ci.est ? '≈' : '') + v2(ci.value), u: '升/百公里', acc: true },
         { k: '累计行程', v: v0(s.distance), u: '公里' },
         { k: '加油次数', v: String(s.count), u: '次' },
         { k: '加油量', v: v0(s.fuel), u: '升' }
@@ -101,7 +137,7 @@
         return;
       }
       var expanded = w.App.state.expanded;
-      var avg = s.avgCons;
+      var avg = s.avgCons !== null ? s.avgCons : s.estCons;
 
       $('#recList').innerHTML = rows.map(function (r) {
         var open = expanded[r.id];
@@ -111,7 +147,7 @@
             '<span class="rec-bar"></span>' +
             '<span class="rec-date">' + U.slashDate(r.date) + '</span>' +
             '<span class="rec-cons' + (high ? ' high' : '') + '">' + (r.cons === null ? '--' : v2(r.cons)) +
-            '<em>' + (r.cons === null && !r.fullTank ? '未加满' : '升/百公里') + '</em></span>' +
+            '<em>' + (r.cons === null ? (r.fullTank ? '待结算' : '未加满') : '升/百公里') + '</em></span>' +
             '<span class="rec-odo">' + v1(r.odometer) + '<em>公里</em></span>' +
             '<svg class="ico ico-xs chev"><use href="#i-chevron-down"/></svg>' +
           '</button>' +
@@ -217,6 +253,7 @@
       fuelSel.value = (rec && rec.fuelType) || (last && last.fuelType) || '95#汽油';
 
       setSeg('#segFull', rec ? (rec.fullTank ? '1' : '0') : '1');
+      Views.fullHint(rec ? rec.fullTank !== false : true);
       setSeg('#segWarn', rec ? (rec.warnLight ? '1' : '0') : '0');
       setSeg('#segLast', rec ? (rec.lastRecorded === false ? '0' : '1') : '1');
 
@@ -236,6 +273,15 @@
         pay: rec ? Math.abs(rec.payAmount - (rec.amount - (rec.discount || 0))) > 0.02 : false
       };
       $('#entryScroll').scrollTop = 0;
+    },
+
+    // 是否加满的实时说明
+    fullHint: function (full) {
+      var el = $('#fullHint');
+      if (!el) return;
+      el.textContent = full
+        ? '已加满：本次与上次加满之间的油耗会被精确结算。'
+        : '未加满：本次油量累计到下次加满时一起结算，不会丢。';
     },
 
     /* ---------------- 我的统计 ---------------- */
@@ -268,14 +314,15 @@
         rows.push(r);
       });
       var avgPrice = fuel > 0 ? pay / fuel : null;
+      var ci = consInfo(s);
 
       $('#statsGrid').innerHTML =
         statItem('加油次数', String(count), '次') +
         statItem('累计油费', v2(pay), '元', { acc: true }) +
         statItem('累计油量', v2(fuel), '升') +
         statItem('行驶里程', v0(s.distance), '公里') +
-        statItem('平均油耗', v11(s.avgCons), '升/百公里', {
-          acc: true, hint: '两次加满之间的加油量 ÷ 行驶里程 × 100'
+        statItem('平均油耗', (ci.est ? '≈' : '') + v11(ci.value), '升/百公里', {
+          acc: true, hint: HINT_CONS
         }) +
         statItem('每公里油费', s.perKm === null ? '--' : v2(s.perKm), '元/公里') +
         statItem('平均油价', avgPrice === null ? '--' : v2(avgPrice), '元/升') +

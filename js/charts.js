@@ -44,7 +44,7 @@
       var W = Math.max(240, Math.round(el.clientWidth || 320));
       var H = Math.round(el.clientHeight || 200);
       if (!points.length) {
-        el.innerHTML = '<div class="chart-empty">暂无油耗数据</div>';
+        el.innerHTML = '<div class="chart-empty">' + (opts.empty || '暂无油耗数据') + '</div>';
         return;
       }
       var acc = cssVar('--acc', '#45b97c');

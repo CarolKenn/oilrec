@@ -341,17 +341,56 @@
   };
 
   /* ---------------- 油耗计算 ---------------- */
+  // 估算口径参数：满箱法拿不到结果时的兜底
+  var EST_WINDOW = 12;        // 最多回看最近 12 次加油
+  var EST_MIN_DIST = 300;     // 样本里程不足 300 公里时扩大到全部记录
+  var EST_FLOOR_DIST = 100;   // 低于 100 公里不给估算，误差太大
+
+  function odoSort(a, b) {
+    return (a.odometer - b.odometer) || String(a.date).localeCompare(String(b.date));
+  }
+
+  // 累计口径：Σ 加油量 ÷ Σ 里程（首条只作为起点，其油量不计入）
+  function cumAgg(list) {
+    var fuel = 0, dist = 0, n = 0, from = null, to = null;
+    for (var i = 1; i < list.length; i++) {
+      // 中间漏记过加油：之前的累计不可用，从本条重新开始
+      if (list[i].lastRecorded === false) {
+        fuel = 0; dist = 0; n = 0; from = null;
+        continue;
+      }
+      var d = list[i].dist;
+      if (d === null || d === undefined || !(d > 0)) continue;
+      fuel += num(list[i].volume);
+      dist += d;
+      n++;
+      if (!from) from = list[i - 1];
+      to = list[i];
+    }
+    if (n < 2 || dist <= 0 || fuel <= 0) return null;
+    return {
+      cons: round(fuel / dist * 100, 2),
+      fuel: round(fuel, 2),
+      dist: round(dist, 1),
+      count: n,
+      from: from ? from.date : null,
+      to: to ? to.date : null
+    };
+  }
+
   var Calc = {
     // 按里程升序，计算每条记录的行驶距离、油耗
     index: function (records) {
-      var list = records.slice().sort(function (a, b) {
-        return (a.odometer - b.odometer) || String(a.date).localeCompare(String(b.date));
-      });
+      var list = records.slice().sort(odoSort);
       var accFuel = 0, accDist = 0;
       return list.map(function (r, i) {
         var prev = i ? list[i - 1] : null;
         var dist = prev ? round(r.odometer - prev.odometer, 1) : null;
-        if (dist !== null && dist > 0) {
+        // 上一条没记录过：这段里程的加油量不完整，放弃累计，从本条重新开始
+        if (r.lastRecorded === false) {
+          accFuel = 0;
+          accDist = 0;
+        } else if (dist !== null && dist > 0) {
           accDist += dist;
           accFuel += num(r.volume);
         }
@@ -373,6 +412,28 @@
       });
     },
 
+    // 估算油耗：没有满箱结算时的近似值
+    // items 必须是 index() 的结果（依赖 dist 字段）
+    estimate: function (items) {
+      var list = (items || []).filter(function (r) {
+        return r && r.odometer != null && isFinite(Number(r.odometer));
+      });
+      if (list.length < 3) return null;
+      list = list.slice().sort(odoSort);
+
+      var res = null;
+      var win = EST_WINDOW;
+      if (list.length > win) res = cumAgg(list.slice(list.length - win));
+      // 窗口内里程太短，扩大样本到全部
+      if (!res || res.dist < EST_MIN_DIST) res = cumAgg(list);
+      if (!res || res.dist < EST_FLOOR_DIST) return null;
+
+      res.window = Math.min(list.length, EST_WINDOW);
+      res.whole = list.length <= EST_WINDOW;
+      res.total = list.length;
+      return res;
+    },
+
     inRange: function (r, range) {
       if (!range || range.type === 'all') return true;
       if (range.type === 'year') return String(r.date).slice(0, 4) === String(range.year);
@@ -388,7 +449,8 @@
       var rows = items.filter(function (r) { return Calc.inRange(r, range); });
       var out = {
         count: rows.length, cost: 0, fuel: 0, discount: 0,
-        distance: 0, avgCons: null, perKm: null, perDay: null
+        distance: 0, avgCons: null, estCons: null, estCount: 0, estDist: 0,
+        consMode: null, perKm: null, perDay: null
       };
       if (!rows.length) return out;
       var segD = 0, segF = 0;
@@ -399,7 +461,19 @@
         if (r.dist !== null && r.dist > 0) out.distance += r.dist;
         if (r.cons !== null) { segD += r.segDist; segF += r.segFuel; }
       });
-      if (segD > 0) out.avgCons = round(segF / segD * 100, 2);
+      if (segD > 0) {
+        out.avgCons = round(segF / segD * 100, 2);
+        out.consMode = 'measured';
+      } else {
+        // 区间内一次都没满箱结算，退化为累计估算
+        var est = Calc.estimate(rows);
+        if (est) {
+          out.estCons = est.cons;
+          out.estCount = est.count;
+          out.estDist = est.dist;
+          out.consMode = 'estimated';
+        }
+      }
       if (out.distance > 0) out.perKm = round(out.cost / out.distance, 2);
       var days = daysBetween(rows[0].date, rows[rows.length - 1].date);
       if (days > 0) out.perDay = round(out.distance / days, 2);
@@ -447,6 +521,25 @@
         if (items[i].cons !== null) return items[i];
       }
       return null;
+    },
+
+    // 首页展示口径：满箱实测优先，缺失时用累计估算兜底
+    latestInfo: function (items) {
+      var list = (items || []).slice().sort(odoSort);
+      var measured = null, mi = -1;
+      for (var i = list.length - 1; i >= 0; i--) {
+        if (list[i].cons !== null) { measured = list[i]; mi = i; break; }
+      }
+      var est = Calc.estimate(list);
+      return {
+        value: measured ? measured.cons : (est ? est.cons : null),
+        estimated: !measured,
+        rec: measured,
+        date: measured ? measured.date : null,
+        pending: measured ? Math.max(0, list.length - 1 - mi) : 0,
+        sample: est,
+        total: list.length
+      };
     },
 
     rangeLabel: function (range) {
