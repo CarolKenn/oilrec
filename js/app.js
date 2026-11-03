@@ -103,8 +103,8 @@
       opts = opts || {};
       var changed = this.state.view !== view;
       if (changed && this.state.view) this.state.prevView = this.state.view;
-      if (view === 'entry' && !this.state.editing) {
-        /* 从底部“加油”进入 = 新增 */
+      if (view === 'entry' && !this.state.editing && changed) {
+        /* 从底部“加油”进入 = 新增；已经在记录页时点同一个 tab 不清空表单 */
         this.state.photo = '';
         w.Views.entry(null);
       }
@@ -116,7 +116,6 @@
         var on = t.dataset.view === view || (view === 'stats' && t.dataset.view === 'me');
         t.classList.toggle('active', on);
       });
-      $('#phone').classList.toggle('entry-open', view === 'entry');
       this.render(view);
       var sc = $('.view.active');
       if (sc && view !== 'entry') sc.scrollTop = 0;
