@@ -92,74 +92,16 @@
     return round(refBase(e.disp, e.turbo) + clampOffset(e.offset), 1);
   }
 
-  function seedDB() {
+  /* 全新安装：不带任何示例记录，由用户自己录入或导入 */
+  function emptyDB() {
     var vehicle = { id: 'v1', name: '默认车辆', plate: '', model: '', engine: { disp: 2.0, turbo: false, offset: 0 } };
-    var consPlan = [
-      10.9, 10.4, 7.8, 7.8, 7.8, 7.8, 8.4, 8.4, 8.4, 7.5,
-      7.5, 7.5, 7.5, 7.5, 10.5, 10.5, 7.4, 8.2, 8.3, 7.8,
-      8.2, 7.6, 7.7, 7.8, 7.8, 7.9, 8.1, 7.6, 7.6, 7.5,
-      7.4, 7.1, 7.9, 7.9, 7.9, 7.9, 6.5, 6.47
-    ];
-    var n = consPlan.length;
-    var raw = [], totalRaw = 0, i;
-    for (i = 0; i < n; i++) {
-      var base = 500 + ((i * 37) % 60);
-      if (consPlan[i] > 10) base = 330 + ((i * 13) % 40);
-      raw.push(base);
-      totalRaw += base;
-    }
-    var scale = 19702 / (totalRaw - raw[0]);
-    var startOdo = 1280;
-    var startDate = new Date(2023, 2, 21);
-    var plan = [];
-    var odo = startOdo, totalCost = 0, totalDiscount = 0;
-    for (i = 0; i < n; i++) {
-      var dist = Math.round(raw[i] * scale * 10) / 10;
-      odo = Math.round((odo + dist) * 10) / 10;
-      var vol = Math.round(dist * consPlan[i] / 100 * 100) / 100;
-      var price = round(7.55 + ((i * 11) % 100) / 100, 2);
-      var discount = round(8 + ((i * 7) % 44), 2);
-      plan.push({ dist: dist, odo: odo, vol: vol, price: price, discount: discount });
-      totalCost += vol * price;
-      totalDiscount += discount;
-    }
-    // 校准价格，使累计油费贴近真实量级（≈ 11968 元）
-    var k = (11968 + totalDiscount) / totalCost;
-    var records = [];
-    for (i = 0; i < n; i++) {
-      var p = plan[i];
-      var unitPrice = round(p.price * k, 2);
-      var amount = round(p.vol * unitPrice, 2);
-      var pay = round(amount - p.discount, 2);
-      var d = new Date(startDate.getTime() + i * 35 * 86400000);
-      records.push({
-        id: 'seed' + i,
-        vehicleId: vehicle.id,
-        date: todayStr(d),
-        time: pad2(7 + (i % 10)) + ':' + pad2((i * 7) % 60),
-        odometer: p.odo,
-        unitPrice: unitPrice,
-        volume: p.vol,
-        amount: amount,
-        discount: p.discount,
-        payPrice: round(pay / p.vol, 2),
-        payAmount: pay,
-        fullTank: true,
-        warnLight: i % 3 === 0,
-        lastRecorded: true,
-        station: ['中石化·建设路站', '中石油·城南站', '壳牌·高新站'][i % 3],
-        fuelType: '95#汽油',
-        note: '',
-        photo: '',
-        createdAt: d.getTime()
-      });
-    }
     return {
       version: 1,
+      seedCleaned: true,
       settings: { theme: 'light', accent: 'green' },
       vehicles: [vehicle],
       currentVehicleId: vehicle.id,
-      records: records
+      records: []
     };
   }
 
@@ -174,7 +116,7 @@
         try { this.db = JSON.parse(raw); } catch (e) { this.db = null; }
       }
       if (!this.db || !this.db.records || !this.db.vehicles) {
-        this.db = seedDB();
+        this.db = emptyDB();
         this.persist();
       }
       this.migrate();
@@ -205,6 +147,14 @@
         r.vehicleId = r.vehicleId || db.currentVehicleId;
         return r;
       });
+
+      // 一次性清理：老版本首次打开会写入 38 条示例记录（id 以 seed 开头）。
+      // 只删这些，用户自己录入或导入的数据一条都不碰。
+      if (!db.seedCleaned) {
+        db.records = db.records.filter(function (r) { return String(r.id || '').indexOf('seed') !== 0; });
+        db.seedCleaned = true;
+        this.persist();
+      }
     },
 
     persist: function () {
