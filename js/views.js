@@ -28,6 +28,7 @@
   }
 
   var HINT_CONS = '两次加满之间的加油量 ÷ 行驶里程 × 100；一次都没加满时（≈）按累计加油量 ÷ 累计里程估算';
+  var HINT_DIST = '里程按「本次加油到下次加油」的时间段归属，跨年、跨月的那一段按天数比例分摊到两边，不会整段算给后一个月/后一年';
 
   // 区间平均油耗口径：实测优先，无满箱结算时用估算
   function consInfo(s) {
@@ -84,9 +85,9 @@
       var ci = consInfo(s);
       $('#statGrid').innerHTML =
         statItem('平均油耗', (ci.est ? '≈' : '') + v11(ci.value), '升/百公里', { acc: true, hint: HINT_CONS }) +
-        statItem('平均行程', v2(s.perDay), '公里/天', { hint: '区间内总行驶里程 ÷ 天数' }) +
+        statItem('平均行程', v2(s.perDay), '公里/天', { hint: '区间内总行驶里程 ÷ 覆盖天数' }) +
         statItem('平均油费', v11(s.perKm), '元/公里', { acc: true }) +
-        statItem('统计里程', v0(s.distance), '公里') +
+        statItem('统计里程', v0(s.distance), '公里', { hint: HINT_DIST }) +
         statItem('累计油费', v0(s.cost), '元') +
         statItem('总计优惠', v0(s.discount), '元');
 
@@ -339,7 +340,7 @@
         statItem('加油次数', String(count), '次') +
         statItem('累计油费', v2(pay), '元', { acc: true }) +
         statItem('累计油量', v2(fuel), '升') +
-        statItem('行驶里程', v0(s.distance), '公里') +
+        statItem('行驶里程', v0(s.distance), '公里', { hint: HINT_DIST }) +
         statItem('平均油耗', (ci.est ? '≈' : '') + v11(ci.value), '升/百公里', {
           acc: true, hint: HINT_CONS
         }) +

@@ -50,6 +50,40 @@
   function slashDate(str) {
     return String(str || '').replace(/-/g, '/');
   }
+  // 日期 → 天序号（UTC，避免时区/夏令时干扰）
+  function dnum(str) {
+    var p = String(str || '').split('-');
+    if (p.length < 3) return null;
+    var t = Date.UTC(+p[0], +p[1] - 1, +p[2]);
+    return isNaN(t) ? null : Math.round(t / 86400000);
+  }
+  // 统计区间 → 半开日期窗口 [起, 止)；全部区间返回 null
+  function rangeSpan(range) {
+    if (!range || range.type === 'all') return null;
+    var f, t;
+    if (range.type === 'year') {
+      f = parseInt(range.year, 10) + '-01-01';
+      t = (parseInt(range.year, 10) + 1) + '-01-01';
+    } else {
+      f = range.from || '0000-01-01';
+      var td = parseDate(range.to || '9999-12-31');
+      if (!td) return null;
+      t = todayStr(new Date(td.getTime() + 86400000));
+    }
+    var a = dnum(f), b = dnum(t);
+    if (a === null || b === null || b <= a) return null;
+    return [a, b];
+  }
+  // 一段 [a, b) 落在区间内的比例与重叠天数
+  function wseg(a, b, span) {
+    var A = dnum(a), B = dnum(b);
+    if (A === null) return null;
+    if (B === null || B <= A) B = A + 1;
+    if (!span) return { w: 1, days: B - A };
+    var ov = Math.min(B, span[1]) - Math.max(A, span[0]);
+    if (ov <= 0) return null;
+    return { w: ov / (B - A), days: ov };
+  }
 
   /* ---------------- 演示数据 ---------------- */
   /* ---------------- 参考油耗：按排量 + 进气形式估算 ----------------
@@ -334,7 +368,7 @@
     // 按里程升序，计算每条记录的行驶距离、油耗
     index: function (records) {
       var list = records.slice().sort(odoSort);
-      var accFuel = 0, accDist = 0;
+      var accFuel = 0, accDist = 0, accFrom = null;
       // 滚动窗口：最近 LIVE_WINDOW 段的加油量与里程，用于未结算记录的参考值
       var win = [], winFuel = 0, winDist = 0;
 
@@ -345,10 +379,12 @@
         if (r.lastRecorded === false) {
           accFuel = 0;
           accDist = 0;
+          accFrom = null;
           win = [];
           winFuel = 0;
           winDist = 0;
         } else if (dist !== null && dist > 0) {
+          if (!(accDist > 0)) accFrom = prev ? prev.date : r.date;
           accDist += dist;
           accFuel += num(r.volume);
           var f = num(r.volume);
@@ -361,13 +397,15 @@
             winDist -= old.d;
           }
         }
-        var cons = null, segFuel = null, segDist = null;
+        var cons = null, segFuel = null, segDist = null, segFrom = null;
         if (r.fullTank && accDist > 0) {
           segFuel = round(accFuel, 2);
           segDist = round(accDist, 1);
+          segFrom = accFrom || r.date;
           cons = round(accFuel / accDist * 100, 2);
           accFuel = 0;
           accDist = 0;
+          accFrom = null;
         }
         // 还没结算：给一个「最近累计加油量 ÷ 累计里程」的参考值，下次加满会被精确值替换
         var liveCons = null, liveDist = null;
@@ -380,6 +418,7 @@
           cons: cons,
           segFuel: segFuel,
           segDist: segDist,
+          segFrom: segFrom,
           liveCons: liveCons,
           liveDist: liveDist,
           costPerKm: (dist !== null && dist > 0) ? round(num(r.payAmount) / dist, 2) : null
@@ -425,17 +464,32 @@
       var out = {
         count: rows.length, cost: 0, fuel: 0, discount: 0,
         distance: 0, avgCons: null, estCons: null, estCount: 0, estDist: 0,
-        consMode: null, perKm: null, perDay: null
+        consMode: null, perKm: null, perDay: null, days: 0
       };
       if (!rows.length) return out;
-      var segD = 0, segF = 0;
+      var segD = 0, segF = 0, cover = 0;
       rows.forEach(function (r) {
         out.cost += num(r.payAmount) || num(r.amount);
         out.fuel += num(r.volume);
         out.discount += Math.max(0, num(r.amount) - (num(r.payAmount) || num(r.amount)));
-        if (r.dist !== null && r.dist > 0) out.distance += r.dist;
-        if (r.cons !== null) { segD += r.segDist; segF += r.segFuel; }
       });
+
+      // 里程 / 油量按时间分摊：跨年、跨月的那一段，按落在区间内的天数比例切给两边
+      var span = rangeSpan(range);
+      items.forEach(function (r, i) {
+        var p = i ? items[i - 1] : null;
+        // 漏记的一次只影响油耗（油量不完整），里程本身仍然是真跑过的
+        if (!p) return;
+        if (r.dist !== null && r.dist > 0) {
+          var w1 = wseg(p.date, r.date, span);
+          if (w1) { out.distance += r.dist * w1.w; cover += w1.days; }
+        }
+        if (r.cons !== null) {
+          var w2 = wseg(r.segFrom || r.date, r.date, span);
+          if (w2) { segD += r.segDist * w2.w; segF += r.segFuel * w2.w; }
+        }
+      });
+
       if (segD > 0) {
         out.avgCons = round(segF / segD * 100, 2);
         out.consMode = 'measured';
@@ -450,8 +504,8 @@
         }
       }
       if (out.distance > 0) out.perKm = round(out.cost / out.distance, 2);
-      var days = daysBetween(rows[0].date, rows[rows.length - 1].date);
-      if (days > 0) out.perDay = round(out.distance / days, 2);
+      out.days = cover;
+      if (cover > 0) out.perDay = round(out.distance / cover, 2);
       out.cost = round(out.cost, 2);
       out.discount = round(out.discount, 2);
       out.fuel = round(out.fuel, 2);
