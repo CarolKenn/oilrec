@@ -1,0 +1,7 @@
+.tmp/
+node_modules/
+oilrec-netlify.zip
+*.xlsx
+*.jpg
+*.JPG
+.workbuddy/

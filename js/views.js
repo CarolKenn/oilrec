@@ -276,8 +276,15 @@
       // 重置联动状态；编辑旧记录时，原有的实付数据视为“已填”，不会被联动覆盖
       var st = w.App.state;
       st.entryAuto = {};
+      st.entryPreset = {};
       st.entrySeq = {};
       st.entryTick = 0;
+      // 程序预填的数（沿用上条单价 / 编辑时的原值）不算“用户亲手填的”，
+      // 点进去会全选，直接输入即覆盖，避免 7.79 + 7.92 拼成 7.797.92
+      var numeric = ['fPrice', 'fVolume', 'fAmount', 'fPayPrice', 'fDiscount', 'fPayAmount'];
+      numeric.forEach(function (id) {
+        if (w.Oil.util.num($('#' + id).value) > 0) st.entryPreset[id] = true;
+      });
       if (rec) {
         // 旧记录的实付数据视为“已填”：优惠优先（改加油量时优惠不该被吃掉），其次实付单价、实付金额
         ['fPayAmount', 'fPayPrice', 'fDiscount'].forEach(function (id) {

@@ -27,6 +27,7 @@
       editing: null,
       photo: '',
       entryAuto: {},
+      entryPreset: {},
       entrySeq: {},
       entryTick: 0,
       rangeCtx: null,
@@ -294,7 +295,9 @@
         var el = e.target;
         if (el.tagName === 'INPUT' && el.type === 'text') {
           // 程序算出来的数字，点进去就全选，直接输入即可覆盖
-          if (self.state.entryAuto[el.id] && el.value) {
+          var auto = self.state.entryAuto[el.id];
+          var preset = self.state.entryPreset && self.state.entryPreset[el.id];
+          if ((auto || preset) && el.value) {
             try { el.select(); } catch (err) { /* noop */ }
           }
           setTimeout(function () {
@@ -362,6 +365,7 @@
       // 记住“这一项是人填的、第几个填的”；清空则取消标记
       if ($('#' + anchor).value.trim() !== '') seq[anchor] = ++st.entryTick;
       else delete seq[anchor];
+      if (st.entryPreset) delete st.entryPreset[anchor];
 
       var write = function (id, x) {
         if (id === anchor || !isFinite(x) || !(x > 0)) return false;
@@ -376,11 +380,17 @@
       var inG1 = G1.indexOf(anchor) >= 0;
 
       if (inG1) {
-        // 优先拿另一个“人填的”当已知量，其次才是程序填的，避免半截数字带偏
+        // 已知量优先级：人填的 > 预填的（如沿用上条单价）> 程序算出来的。
+        // 最后一档必须放在最后：否则先填金额时，会把上一轮刚算出的加油量当已知量，
+        // 反推出一个离谱的单价（实测 205 元 → 单价 820）。
         var cand = G1.filter(function (id) { return id !== anchor && has(id); });
         var users1 = cand.filter(function (id) { return seq[id]; })
           .sort(function (a, b) { return seq[b] - seq[a]; });
         var partner = users1[0] || null;
+        if (!partner) {
+          var presets = cand.filter(function (id) { return st.entryPreset && st.entryPreset[id]; });
+          partner = presets[0] || null;
+        }
         if (!partner) {
           var pref = ['fVolume', 'fPrice'].filter(function (id) { return cand.indexOf(id) >= 0; });
           partner = pref[0] || cand[0] || null;
