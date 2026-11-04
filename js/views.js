@@ -273,10 +273,17 @@
         box.innerHTML = '<svg class="ico"><use href="#i-plus"/></svg>';
       }
 
-      w.App.state.entryTouched = {
-        amount: rec ? Math.abs(rec.amount - rec.unitPrice * rec.volume) > 0.02 : false,
-        pay: rec ? Math.abs(rec.payAmount - (rec.amount - (rec.discount || 0))) > 0.02 : false
-      };
+      // 重置联动状态；编辑旧记录时，原有的实付数据视为“已填”，不会被联动覆盖
+      var st = w.App.state;
+      st.entryAuto = {};
+      st.entrySeq = {};
+      st.entryTick = 0;
+      if (rec) {
+        // 旧记录的实付数据视为“已填”：优惠优先（改加油量时优惠不该被吃掉），其次实付单价、实付金额
+        ['fPayAmount', 'fPayPrice', 'fDiscount'].forEach(function (id) {
+          if (w.Oil.util.num($('#' + id).value) > 0) st.entrySeq[id] = ++st.entryTick;
+        });
+      }
       $('#entryScroll').scrollTop = 0;
     },
 

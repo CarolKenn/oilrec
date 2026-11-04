@@ -10,6 +10,9 @@
   var $ = w.$;
   var $$ = w.$$;
 
+  // 记账表单里参与联动的六个数字项
+  var NUM_FIELDS = ['fPrice', 'fVolume', 'fAmount', 'fPayPrice', 'fDiscount', 'fPayAmount'];
+
   var App = {
     state: {
       view: 'home',
@@ -23,7 +26,9 @@
       expanded: {},
       editing: null,
       photo: '',
-      entryTouched: { amount: false, pay: false },
+      entryAuto: {},
+      entrySeq: {},
+      entryTick: 0,
       rangeCtx: null,
       confirmCb: null
     },
@@ -279,27 +284,21 @@
         });
       });
 
-      /* 记账表单联动 */
+      /* 记账表单联动：任意一项改动，其余项自动补全 */
       var scroll = $('#entryScroll');
       scroll.addEventListener('input', function (e) {
         var id = e.target.id;
-        if (id === 'fPrice' || id === 'fVolume') self.calcAmount();
-        else if (id === 'fDiscount') self.calcPay();
-        else if (id === 'fAmount') { self.state.entryTouched.amount = true; self.calcPay(); }
-        else if (id === 'fPayAmount') { self.state.entryTouched.pay = true; self.calcPayPrice(); }
-        else if (id === 'fPayPrice') {
-          var v = U.num($('#fVolume').value);
-          var p = U.num($('#fPayPrice').value);
-          if (v > 0) {
-            self.state.entryTouched.pay = true;
-            $('#fPayAmount').value = U.round(p * v, 2).toFixed(2);
-          }
-        }
+        if (NUM_FIELDS.indexOf(id) >= 0) self.linkEntry(id);
       });
       scroll.addEventListener('focusin', function (e) {
-        if (e.target.tagName === 'INPUT' && e.target.type === 'text') {
+        var el = e.target;
+        if (el.tagName === 'INPUT' && el.type === 'text') {
+          // 程序算出来的数字，点进去就全选，直接输入即可覆盖
+          if (self.state.entryAuto[el.id] && el.value) {
+            try { el.select(); } catch (err) { /* noop */ }
+          }
           setTimeout(function () {
-            try { e.target.scrollIntoView({ block: 'center', behavior: 'smooth' }); } catch (err) { /* noop */ }
+            try { el.scrollIntoView({ block: 'center', behavior: 'smooth' }); } catch (err) { /* noop */ }
           }, 260);
         }
       });
@@ -347,28 +346,101 @@
       });
     },
 
-    /* ---------------- 记账数值联动 ---------------- */
-    calcAmount: function () {
-      if (this.state.entryTouched.amount) return;
-      var p = U.num($('#fPrice').value);
-      var v = U.num($('#fVolume').value);
-      var a = U.round(p * v, 2);
-      $('#fAmount').value = a > 0 ? a.toFixed(2) : '';
-      this.calcPay();
-    },
-    calcPay: function () {
-      if (!this.state.entryTouched.pay) {
-        var a = U.num($('#fAmount').value);
-        var d = U.num($('#fDiscount').value);
-        var pay = U.round(a - d, 2);
-        $('#fPayAmount').value = pay > 0 ? pay.toFixed(2) : '';
+    /* ---------------- 记账数值联动 ----------------
+       三条关系：单价 × 加油量 = 金额；金额 − 优惠 = 实付金额；实付金额 ÷ 加油量 = 实付单价。
+       规则：以用户亲手输入的那两项为准，剩下的一项自动补齐；
+       程序填的数每轮重新推算，推算不出来就清空，不会把中间过程留下的数字当成事实。 */
+    linkEntry: function (anchor) {
+      var st = this.state;
+      var auto = st.entryAuto;
+      var seq = st.entrySeq;
+      var v = function (id) { return U.num($('#' + id).value); };
+      var has = function (id) { return v(id) > 0; };
+      var wrote = {};
+      var keep = {};
+
+      // 记住“这一项是人填的、第几个填的”；清空则取消标记
+      if ($('#' + anchor).value.trim() !== '') seq[anchor] = ++st.entryTick;
+      else delete seq[anchor];
+
+      var write = function (id, x) {
+        if (id === anchor || !isFinite(x) || !(x > 0)) return false;
+        $('#' + id).value = x.toFixed(2);
+        auto[id] = true;
+        wrote[id] = true;
+        return true;
+      };
+
+      /* 一、单价 / 加油量 / 金额：知道任意两个就补第三个 */
+      var G1 = ['fPrice', 'fVolume', 'fAmount'];
+      var inG1 = G1.indexOf(anchor) >= 0;
+
+      if (inG1) {
+        // 优先拿另一个“人填的”当已知量，其次才是程序填的，避免半截数字带偏
+        var cand = G1.filter(function (id) { return id !== anchor && has(id); });
+        var users1 = cand.filter(function (id) { return seq[id]; })
+          .sort(function (a, b) { return seq[b] - seq[a]; });
+        var partner = users1[0] || null;
+        if (!partner) {
+          var pref = ['fVolume', 'fPrice'].filter(function (id) { return cand.indexOf(id) >= 0; });
+          partner = pref[0] || cand[0] || null;
+        }
+        if (partner) {
+          keep[partner] = true;
+          var target = G1.filter(function (id) { return id !== anchor && id !== partner; })[0];
+          var out = target === 'fAmount' ? v('fPrice') * v('fVolume')
+            : target === 'fVolume' ? v('fAmount') / v('fPrice')
+              : v('fAmount') / v('fVolume');
+          // 算不出来就地清掉，别让下游拿上一轮的过期数字继续推
+          if (!write(target, out) && auto[target]) {
+            $('#' + target).value = '';
+            delete auto[target];
+          }
+        }
+      } else {
+        // 改的是实付侧：机显三项原样保留，只在缺一项时补齐
+        if (!has('fAmount') && has('fPrice') && has('fVolume')) write('fAmount', v('fPrice') * v('fVolume'));
+        else if (!has('fVolume') && has('fPrice') && has('fAmount')) write('fVolume', v('fAmount') / v('fPrice'));
+        else if (!has('fPrice') && has('fVolume') && has('fAmount')) write('fPrice', v('fAmount') / v('fVolume'));
+        G1.forEach(function (id) { if (has(id)) keep[id] = true; });
       }
-      this.calcPayPrice();
-    },
-    calcPayPrice: function () {
-      var v = U.num($('#fVolume').value);
-      var p = U.num($('#fPayAmount').value);
-      if (v > 0 && p > 0) $('#fPayPrice').value = (p / v).toFixed(2);
+
+      var V = v('fVolume');
+      var A = v('fAmount');
+
+      /* 二、实付：以最近一次亲手输入的那项为准（实付单价 / 优惠 / 实付金额） */
+      var pick = null;
+      ['fPayPrice', 'fDiscount', 'fPayAmount'].forEach(function (id) {
+        if (seq[id] && has(id) && (pick === null || seq[id] > seq[pick])) pick = id;
+      });
+
+      if (A > 0) {
+        if (pick === 'fPayPrice') {
+          if (V > 0) {
+            var pa1 = v('fPayPrice') * V;
+            if (write('fPayAmount', pa1)) write('fDiscount', A - pa1);
+          }
+        } else if (pick === 'fDiscount') {
+          var pa2 = A - v('fDiscount');
+          if (write('fPayAmount', pa2) && V > 0) write('fPayPrice', pa2 / V);
+        } else if (pick === 'fPayAmount') {
+          var pa3 = v('fPayAmount');
+          write('fDiscount', A - pa3);
+          if (V > 0) write('fPayPrice', pa3 / V);
+        } else {
+          // 实付侧一个字都没填：默认按原价付款，用户改实付金额后优惠会自动出来
+          write('fPayAmount', A);
+          if (V > 0) write('fPayPrice', A / V);
+        }
+      }
+
+      /* 三、上一轮自动填、这一轮已经算不出来的项，清空避免留下过期数字 */
+      NUM_FIELDS.forEach(function (id) {
+        if (id === anchor || wrote[id] || keep[id]) return;
+        if (auto[id]) { $('#' + id).value = ''; delete auto[id]; delete seq[id]; }
+      });
+
+      delete auto[anchor];
     },
 
     /* ---------------- 记录操作 ---------------- */
@@ -417,10 +489,14 @@
       if (dup.length) { self.toast('该里程已存在一条记录'); return; }
 
       if (!amount) amount = U.round(price * volume, 2);
+      if (!amount && payAmount) amount = U.round(payAmount + discount, 2);
+      if (discount > amount) discount = U.round(amount, 2);   // 优惠不可能超过机显金额
       if (!payAmount) payAmount = U.round(amount - discount, 2);
       if (!payAmount) payAmount = amount;
-      if (!payPrice && volume) payPrice = U.round(payAmount / volume, 2);
-      if (!price && volume) price = payPrice;
+      if (!amount) amount = payAmount;
+      if (!payPrice && volume && payAmount) payPrice = U.round(payAmount / volume, 2);
+      if (!price && volume && amount) price = U.round(amount / volume, 2);
+      if (!price) price = payPrice;
 
       var rec = {
         id: self.state.editing ? self.state.editing.id : U.uid(),
